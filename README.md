@@ -57,19 +57,6 @@ Enter the sequence filtering threshold: 10
 ```
 This threshold will be applied throughout the analysis, influencing clustering and output files.
 
-## Author
-- **Your Name**  
-- **Your Institution / Research Group**
-
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-- Thanks to the CD-HIT and BEDTools teams for developing essential bioinformatics tools.
-- Support from [Your Institution].
-
-
-
 
 
 
@@ -126,11 +113,14 @@ The user will need to provide:
 
 ## Execution Example
 ```bash
-bash script.sh
+bash Zeni_annot_gffbed.sh
 ```
 And provide the required inputs as prompted.
 
 ---
+## Acknowledgments
+- Thanks to the CD-HIT, NCBI and BEDTools teams for developing essential bioinformatics tools.
+- Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
 
 ## Contact
 For questions or improvements, contact [rodrigo-zeni@outlook.com.br].

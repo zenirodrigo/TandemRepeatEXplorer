@@ -1,4 +1,7 @@
-# genome-manipulation-satDNA
+# This repository contains two scripts:
+
+-   Zeni_repgen.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
+-   Zeni_annot_gffbed.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## Zeni_repgen.sh - Genome Repeat Analysis Pipeline

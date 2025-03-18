@@ -45,6 +45,9 @@ Outputs:
 
 Dependencies:
 
-      BLAST+ (makeblastdb, blastn)
+       BLAST+ (makeblastdb, blastn)
 
       Python 3 with BioPython, pandas, matplotlib, seaborn
+Usage:
+      ./Zeni_repgen.sh
+      # Follow interactive prompts to input files and parameters

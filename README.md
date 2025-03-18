@@ -2,11 +2,11 @@
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Zeni_repgen.sh - Genome Repeat Analysis Pipeline
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 A Bash/Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
 
 Features:
-
   Processes multiple genome files and reference sequences
 
   Automated BLAST analysis with configurable parameters
@@ -45,9 +45,9 @@ Outputs:
 
 Dependencies:
 
-       BLAST+ (makeblastdb, blastn)
+        BLAST+ (makeblastdb, blastn)
 
-      Python 3 with BioPython, pandas, matplotlib, seaborn
-Usage:
+        Python 3 with BioPython, pandas, matplotlib, seaborn
+Usage:        
       ./Zeni_repgen.sh
       # Follow interactive prompts to input files and parameters

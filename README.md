@@ -1,49 +1,50 @@
 # genome-manipulation-satDNA
 
-
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Zeni_repgen.sh - Genome Repeat Analysis Pipeline
+
 A Bash/Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
 
 Features:
 
-Processes multiple genome files and reference sequences
+  Processes multiple genome files and reference sequences
 
-Automated BLAST analysis with configurable parameters
+  Automated BLAST analysis with configurable parameters
 
-Merges adjacent repeats within 2000bp
+  Merges adjacent repeats within 2000bp (can be changed)
 
-Generates three visualization types:
+  Generates three visualization types:
 
-Chromosome-scale repeat distribution
+      Chromosome-scale repeat distribution
 
-Heatmap of repeat prevalence
+      Heatmap of repeat prevalence
 
-Scatter plot of repeat sizes
+      Scatter plot of repeat sizes
 
-Handles common FASTA formats (.fa, .fna, .fasta)
+  Handles common FASTA formats (.fa, .fna, .fasta)
 
 Inputs:
 
-Genome assemblies
+  Genome assemblies
 
-Reference monomer sequences
+  Reference monomer sequences
 
-Parameters: sequence count, repeat multiplier
+  Parameters: sequence count, repeat multiplier
 
 Outputs:
 
-BED files with merged repeat regions
+  BED files with merged repeat regions
 
-Publication-quality plots (PNG/PDF):
+  Publication-quality plots (PNG/PDF):
 
-chromosomes_with_annotations.*
+  chromosomes_with_annotations.*
 
-array_frequency_heatmap.png
+  array_frequency_heatmap.png
 
-array_chromosome_vs_size_scatter.png
+  array_chromosome_vs_size_scatter.png
 
 Dependencies:
 
-BLAST+ (makeblastdb, blastn)
+      BLAST+ (makeblastdb, blastn)
 
-Python 3 with BioPython, pandas, matplotlib, seaborn
+      Python 3 with BioPython, pandas, matplotlib, seaborn

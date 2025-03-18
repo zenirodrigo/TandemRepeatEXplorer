@@ -2,6 +2,7 @@
 [![BLAST](https://img.shields.io/badge/BLAST-Required-0077CC?logo=NCBI&logoColor=white)](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
 [![Shell Script](https://img.shields.io/badge/Shell_Script-Compatible-brightgreen?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+
 # This repository contains two scripts:
 
 -   Zeni_repgen.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
@@ -28,13 +29,13 @@ A Bash/Python pipeline for identifying and visualizing satellite DNA arrays in g
 
 ---
 
-## Dependencies
+## 🛠️ Dependencies
 - BLAST+ (makeblastdb, blastn)
 - Python 3 with BioPython, pandas, matplotlib, seaborn
 
 ---
 
-## Installation
+## 📥 Installation
 Before running the script, ensure that the required dependencies are installed:
 
 ```bash
@@ -44,14 +45,14 @@ pip install biopython pandas matplotlib seaborn
 
 ---
 
-## Inputs files:
+## 📂 Inputs files:
 - Genome assemblies
 - Reference monomer sequences
 - Parameters: sequence count, repeat multiplier
 
 ---
 
-## Outputs files:
+## 📂 Outputs files:
 - BED files with merged repeat regions
 - Publication-quality plots (PNG/PDF):
 - chromosomes_with_annotations.*png and pdf
@@ -92,7 +93,7 @@ This script automates the process of:
 
 ---
 
-## Dependencies
+## 🛠️ Dependencies
 Before running the script, make sure you have installed:
 - `BLAST+`
 - `seqtk`
@@ -106,7 +107,7 @@ sudo apt update && sudo apt install ncbi-blast+ seqtk parallel
 
 ---
 
-## Outputs
+##📂 Outputs
 - `valid_monomers.filtered.bed`: `.bed` file with filtered intervals.
 - `<output_seqtk>`: FASTA file with extracted sequences.
 - `<final_file>`: Tabular file containing annotated genes in the identified regions.

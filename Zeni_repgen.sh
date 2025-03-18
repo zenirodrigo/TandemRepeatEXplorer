@@ -9,7 +9,7 @@ _autocomplete() {
     COMPREPLY=( $(compgen -f -- "$cur") )
 }
 
-# Assign autocomplete to the read command
+# Assign autocomplete to read command
 complete -F _autocomplete read
 
 # ------------------------------------------------
@@ -28,11 +28,11 @@ remove_extensions() {
 read -e -p "Enter genome file names (space-separated): " input_biblios
 
 # Get number of sequences to use
-read -p "How many chromosome sequences will be used? " num_sequences
+read -p "How many chromosomes sequences will be used? " num_sequences
 
 # Get reference files and multiplier
 read -e -p "Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): " refs_in
-read -p "How many monomers will be used to create an array (minimum monomers to form an array in this study)? " multiplier
+read -p "How many monomers will be used to create a array (here is the minimum monomers to form a array in this study? " multiplier
 
 # -------------------------------------------------
 # 1) Remove extensions from reference files
@@ -85,7 +85,7 @@ for input_biblio in $input_biblios; do
     # Define BLAST output name
     blast_output="$genome_name/${genome_name}_blast"
 
-    # Create temporary BED file
+    # Create temp BED file
     temp_bed="$genome_name/valid_monomers_temp.bed"
     > "$temp_bed"
 
@@ -150,7 +150,7 @@ for input_biblio in $input_biblios; do
     echo "File valid_monomers.bed generated for genome $genome_name."
 
     # -------------------------------------------------------
-    # Python visualization script with fixed color mapping
+    # Python visualization script (MODIFICADO PARA CORES CONSISTENTES)
     # -------------------------------------------------------
 python3 - <<EOF
 import os
@@ -159,19 +159,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import SeqIO
 import re
+import hashlib
 
-# Function to read the BED file
+# 1) Read BED file
 def read_bed(file):
     df = pd.read_csv(file, sep='\t', header=None, names=['Chromosome', 'Start', 'End', 'Reference'])
     df['Start'] = pd.to_numeric(df['Start'], errors='coerce')
     df['End'] = pd.to_numeric(df['End'], errors='coerce')
     return df
 
-# Natural sort function
+# 2) Natural sort function
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
 
-# Function to get chromosome lengths
+# 3) Get chromosome lengths
 def get_chromosome_lengths(fasta_file, relevant_chromosomes):
     lengths = {}
     for record in SeqIO.parse(fasta_file, "fasta"):
@@ -179,7 +180,7 @@ def get_chromosome_lengths(fasta_file, relevant_chromosomes):
             lengths[record.id] = len(record.seq)
     return lengths
 
-# Function to merge intervals
+# 4) Merge intervals
 def merge_intervals(df):
     merged = []
     for chrom, group in df.groupby('Chromosome'):
@@ -197,61 +198,22 @@ def merge_intervals(df):
         merged.append({'Chromosome': chrom, 'Start': start, 'End': end, 'References': list(refs)})
     return pd.DataFrame(merged)
 
-# ------------------------------------------------------
-# Fixed color configuration for references
-# ------------------------------------------------------
-# Define the fixed list of expected references
-fixed_refs = ['1', '2', '3']
-fixed_color_map = {
-    '1': (0.9, 0.1, 0.1),    # Bright red
-    '2': (0.1, 0.9, 0.1),    # Lime green
-    '3': (0.1, 0.1, 0.9)     # Royal blue
-}
-
-# If additional references exist, use a fallback
+# 5) Color configuration using hash for all references
 num_colors = 200
-manual_colors = [
-    (0.9, 0.1, 0.1),    # Bright red
-    (0.1, 0.9, 0.1),    # Lime green
-    (0.1, 0.1, 0.9),    # Royal blue
-    (0.9, 0.9, 0.1),    # Gold
-    (0.9, 0.1, 0.9),    # Neon magenta
-    (0.1, 0.9, 0.9),    # Cyan
-    (0.5, 0.1, 0.9),    # Electric purple
-    (0.9, 0.5, 0.1),    # Burnt orange
-    (0.1, 0.5, 0.9),    # Sky blue
-    (0.5, 0.9, 0.1),    # Acid lime
-    (0.9, 0.1, 0.5),    # Hot pink
-    (0.1, 0.9, 0.5),    # Mint green
-    (0.5, 0.1, 0.5),    # Wine
-    (0.5, 0.5, 0.1),    # Olive
-    (0.1, 0.5, 0.5)     # Teal
-]
-remaining_colors = sns.color_palette("husl", num_colors - len(manual_colors))
-big_palette = manual_colors + remaining_colors
+big_palette = sns.color_palette("husl", num_colors)
 
 def get_color_for_ref(ref):
-    if ref in fixed_color_map:
-        return fixed_color_map[ref]
-    else:
-        import hashlib
-        h = hashlib.md5(ref.encode('utf-8')).hexdigest()
-        idx = int(h, 16) % (num_colors - len(manual_colors)) + len(manual_colors)
-        return big_palette[idx]
+    # Generate consistent color based on reference name hash
+    h = hashlib.md5(ref.encode('utf-8')).hexdigest()
+    idx = int(h, 16) % num_colors
+    return big_palette[idx]
 
-# For legend and mapping, use the fixed list of references
-all_refs = fixed_refs
-color_map = {r: get_color_for_ref(r) for r in all_refs}
-
-# ------------------------------------------------------
-# Data processing
-# ------------------------------------------------------
 # Input paths
 fasta_file = "$temp_genome"
 bed_file   = "$genome_name/valid_monomers.bed"
 df = read_bed(bed_file)
 
-# Determine relevant chromosomes
+# Chromosome processing
 relevant_chromosomes = df['Chromosome'].unique()
 chromosome_lengths   = get_chromosome_lengths(fasta_file, relevant_chromosomes)
 
@@ -261,7 +223,12 @@ filtered_chromosomes = {chrom: length for chrom, length in chromosome_lengths.it
 df_filtered = df_filtered[df_filtered['Chromosome'].isin(filtered_chromosomes.keys())]
 df_merged   = merge_intervals(df_filtered)
 
-# Calculate minimum and maximum sizes for each reference
+# Reference processing
+bed_refs = df_merged['References'].explode().unique()
+all_refs = sorted(bed_refs, key=natural_sort_key)
+color_map = {r: get_color_for_ref(r) for r in all_refs}
+
+# Size calculations
 reference_sizes = {}
 for ref in all_refs:
     subset = df_merged[df_merged['References'].apply(lambda x: ref in x)]
@@ -283,15 +250,15 @@ for idx, chrom in enumerate(sorted_chromosomes):
     length = filtered_chromosomes[chrom]
     length_mb = length / 1e6
     y_position = idx * spacing
-
-    # Draw chromosome baseline
+    
+    # Chromosome baseline
     plt.plot([0, length_mb], [y_position, y_position], color='lightgray', linewidth=3)
     plt.fill_between([0, length_mb], y_position - 0.4, y_position + 0.4, color='lightgray', alpha=0.6)
-
+    
     chrom_data = df_merged[df_merged['Chromosome'] == chrom]
     for _, row in chrom_data.iterrows():
         start_mb = row['Start'] / 1e6
-        end_mb   = row['End'] / 1e6
+        end_mb   = row['End']   / 1e6
         refs = row['References']
         segment_width = (end_mb - start_mb) / len(refs) if len(refs) else 0
         for i, ref in enumerate(refs):
@@ -306,7 +273,7 @@ for idx, chrom in enumerate(sorted_chromosomes):
 
 # Legend
 handles = [plt.Line2D([0], [0], color=color_map[ref], lw=5) for ref in all_refs]
-labels  = [f"Reference {ref} (min: {reference_sizes[ref][0]:,.0f} bp, max: {reference_sizes[ref][1]:,.0f} bp)" for ref in all_refs]
+labels  = [f"{ref} (min: {reference_sizes[ref][0]:,.0f} bp, max: {reference_sizes[ref][1]:,.0f} bp)" for ref in all_refs]
 
 plt.legend(handles, labels, title="References", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
 plt.yticks([i * spacing for i in range(len(sorted_chromosomes))], sorted_chromosomes, fontsize=12)

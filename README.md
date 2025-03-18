@@ -1,63 +1,80 @@
 # genome-manipulation-satDNA
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Zeni_repgen.sh - Genome Repeat Analysis Pipeline
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## Zeni_repgen.sh - Genome Repeat Analysis Pipeline
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-A Bash/Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
+## Description
+This script processes genomic sequences using CD-HIT, allowing the user to define a variable threshold for filtering sequences. The script extracts relevant annotations, generates BED files, and creates FASTA files with extended sequences from the reference genome.
 
-Features:
-  Processes multiple genome files and reference sequences
+## Features
+- Filters sequences using a user-defined threshold instead of a fixed value.
+- Generates BED files with reference annotations.
+- Extracts sequences from the reference genome, including 5000 bp before and after the annotated region.
+- Ensures consistent processing across multiple libraries.
 
-  Automated BLAST analysis with configurable parameters
+## Requirements
+- **CD-HIT** (Cluster Database at High Identity with Tolerance)
+- **Python 3.x**
+- **BioPython** (for FASTA processing)
+- **BEDTools** (for genomic coordinate manipulations)
 
-  Merges adjacent repeats within 2000bp (can be changed)
+## Installation
+Before running the script, ensure that the required dependencies are installed:
 
-  Generates three visualization types:
+```bash
+sudo apt-get install bedtools
+pip install biopython
+```
 
-      Chromosome-scale repeat distribution
+Ensure that CD-HIT is installed and accessible in your system:
+```bash
+sudo apt-get install cd-hit
+```
 
-      Heatmap of repeat prevalence
+## Usage
+Run the script by executing:
 
-      Scatter plot of repeat sizes
+```bash
+bash script.sh
+```
 
-  Handles common FASTA formats (.fa, .fna, .fasta)
+During execution, the script will prompt the user to input the threshold for filtering sequences. This value will be used dynamically throughout the script.
 
-Inputs:
+## Input Files
+- **FASTA files**: Contain genomic sequences to be processed.
+- **BED files**: Store annotations with genomic coordinates.
 
-  Genome assemblies
+## Output Files
+- **Filtered FASTA files**: Contain sequences after applying the user-defined threshold.
+- **BED annotation files**: Provide processed reference annotations.
+- **Extracted FASTA files**: Contain reference genome sequences with 5000 bp padding on both ends.
 
-  Reference monomer sequences
+## Example
+Upon execution, the script will ask for a filtering threshold:
+```bash
+Enter the sequence filtering threshold: 10
+```
+This threshold will be applied throughout the analysis, influencing clustering and output files.
 
-  Parameters: sequence count, repeat multiplier
+## Author
+- **Your Name**  
+- **Your Institution / Research Group**
 
-Outputs:
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-  BED files with merged repeat regions
+## Acknowledgments
+- Thanks to the CD-HIT and BEDTools teams for developing essential bioinformatics tools.
+- Support from [Your Institution].
 
-  Publication-quality plots (PNG/PDF):
 
-  chromosomes_with_annotations.*
-
-  array_frequency_heatmap.png
-
-  array_chromosome_vs_size_scatter.png
-
-Dependencies:
-
-        BLAST+ (makeblastdb, blastn)
-
-        Python 3 with BioPython, pandas, matplotlib, seaborn
-Usage:        
-      ./Zeni_repgen.sh
-      # Follow interactive prompts to input files and parameters
 
 
 
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
--
-# Zeni_annot_gffbed.sh -  BLAST Analysis and GFF Comparison in genomes assembled
+## Zeni_annot_gffbed.sh -  BLAST Analysis and GFF Comparison in genomes assembled
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description

@@ -8,50 +8,62 @@
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
-This script processes genomic sequences using CD-HIT, allowing the user to define a variable threshold for filtering sequences. The script extracts relevant annotations, generates BED files, and creates FASTA files with extended sequences from the reference genome.
+A Bash/Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
+
+---
 
 ## Features
-- Filters sequences using a user-defined threshold instead of a fixed value.
-- Generates BED files with reference annotations.
-- Extracts sequences from the reference genome, including 5000 bp before and after the annotated region.
-- Ensures consistent processing across multiple libraries.
+- Processes multiple genome files and reference sequences
+- Automated BLAST analysis with configurable parameters
+- Merges adjacent repeats within 2000bp
+- Generates three visualization types:
+- Chromosome-scale repeat distribution
+- Heatmap of repeat prevalence
+- Scatter plot of repeat sizes
+- Handles common FASTA formats (.fa, .fna, .fasta)
 
-## Requirements
-- **CD-HIT** (Cluster Database at High Identity with Tolerance)
-- **Python 3.x**
-- **BioPython** (for FASTA processing)
-- **BEDTools** (for genomic coordinate manipulations)
+---
+
+## Dependencies
+- BLAST+ (makeblastdb, blastn)
+- Python 3 with BioPython, pandas, matplotlib, seaborn
+
+---
 
 ## Installation
 Before running the script, ensure that the required dependencies are installed:
 
 ```bash
 sudo apt-get install bedtools
-pip install biopython
+pip install biopython pandas matplotlib seaborn
 ```
 
-Ensure that CD-HIT is installed and accessible in your system:
-```bash
-sudo apt-get install cd-hit
-```
+---
+
+## Inputs files:
+- Genome assemblies
+- Reference monomer sequences
+- Parameters: sequence count, repeat multiplier
+
+---
+
+## Outputs files:
+- BED files with merged repeat regions
+- Publication-quality plots (PNG/PDF):
+- chromosomes_with_annotations.*png and pdf
+- array_frequency_heatmap.png
+- array_chromosome_vs_size_scatter.png
+
+---
 
 ## Usage
 Run the script by executing:
 
 ```bash
-bash script.sh
+bash Zeni_repgen.sh
 ```
 
 During execution, the script will prompt the user to input the threshold for filtering sequences. This value will be used dynamically throughout the script.
-
-## Input Files
-- **FASTA files**: Contain genomic sequences to be processed.
-- **BED files**: Store annotations with genomic coordinates.
-
-## Output Files
-- **Filtered FASTA files**: Contain sequences after applying the user-defined threshold.
-- **BED annotation files**: Provide processed reference annotations.
-- **Extracted FASTA files**: Contain reference genome sequences with 5000 bp padding on both ends.
 
 ## Example
 Upon execution, the script will ask for a filtering threshold:
@@ -90,13 +102,20 @@ sudo apt update && sudo apt install ncbi-blast+ seqtk parallel
 
 ---
 
+## Outputs
+- `valid_monomers.filtered.bed`: `.bed` file with filtered intervals.
+- `<output_seqtk>`: FASTA file with extracted sequences.
+- `<final_file>`: Tabular file containing annotated genes in the identified regions.
+
+---
+
 ## Usage
 Run the script and follow the interactive instructions:
 ```bash
 bash script.sh
 ```
 The user will need to provide:
-1. **Library file** (FASTA)
+1. **genome file** (FASTA)
 2. **Reference file** (FASTA)
 3. **Reference sequence multiplier**
 4. **BLAST output file**
@@ -107,13 +126,6 @@ The user will need to provide:
 
 ---
 
-## Outputs
-- `valid_monomers.filtered.bed`: `.bed` file with filtered intervals.
-- `<output_seqtk>`: FASTA file with extracted sequences.
-- `<final_file>`: Tabular file containing annotated genes in the identified regions.
-
----
-
 ## Execution Example
 ```bash
 bash Zeni_annot_gffbed.sh
@@ -121,8 +133,9 @@ bash Zeni_annot_gffbed.sh
 And provide the required inputs as prompted.
 
 ---
+
 ## Acknowledgments
-- Thanks to the CD-HIT, NCBI and BEDTools teams for developing essential bioinformatics tools.
+- NCBI, Heng Li and BEDTools teams for developing essential bioinformatics tools.
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
 - This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
 

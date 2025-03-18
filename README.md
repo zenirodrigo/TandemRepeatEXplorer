@@ -121,6 +121,7 @@ And provide the required inputs as prompted.
 ## Acknowledgments
 - Thanks to the CD-HIT, NCBI and BEDTools teams for developing essential bioinformatics tools.
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
+- This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
 
 ## Contact
 For questions or improvements, contact [rodrigo-zeni@outlook.com.br].

@@ -56,8 +56,16 @@ pip install biopython pandas matplotlib seaborn
 - BED files with merged repeat regions
 - Publication-quality plots (PNG/PDF):
 - chromosomes_with_annotations.*png and pdf
+
+![chromosomes_with_annotations](https://github.com/user-attachments/assets/c40c7a1c-5443-411f-8cc3-63ad17b1e919)
+
 - array_frequency_heatmap.png
+
+![array_frequency_heatmap](https://github.com/user-attachments/assets/b8d7d66d-020b-42ba-8b62-c76608fccc7d)
+
 - array_chromosome_vs_size_scatter.png
+
+![amex](https://github.com/user-attachments/assets/54ed1693-9b8e-46dd-8392-55d5442b73d7)
 
 ---
 

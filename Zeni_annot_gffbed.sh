@@ -103,18 +103,32 @@ awk -F'\t' 'BEGIN {OFS=FS}
     $3 == "gene" {
         gsub(/\r/, "", $0)
         split($9, attr, ";")
-        symbol = ""
+        symbol = "No symbol"
+        
+        # Primeiro verifica por "symbol="
         for (i in attr) {
             if (attr[i] ~ /symbol=/) {
-                split(attr[i], parts, "=")
+                split(attr[i], parts, /[=]/)
                 symbol = parts[2]
                 gsub(/"/, "", symbol)
                 break
             }
         }
+        
+        # Se não encontrou "symbol=", procura por "gene="
+        if (symbol == "No symbol") {
+            for (i in attr) {
+                if (attr[i] ~ /gene=/) {
+                    split(attr[i], parts, /[=]/)
+                    symbol = parts[2]
+                    gsub(/"/, "", symbol)
+                    break
+                }
+            }
+        }
+        
         print $1, $4, $5, symbol
     }' "$arquivo_gff" | sort -k1,1 -k2,2n > "$gff_indexado"
-
 # Parallel processing function for each .bed region
 processar_regiao() {
     local cromossomo=$1

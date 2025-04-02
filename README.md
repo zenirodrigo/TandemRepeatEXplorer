@@ -4,8 +4,8 @@
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
 
-<p align="center">
-  <img src="social-preview.png" width="100" alt="Ícone do Repositório">
+<p align="right">
+  <img src="social-preview.png" width="150" alt="Ícone do Repositório">
 </p>
 
 

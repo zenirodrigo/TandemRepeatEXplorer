@@ -183,9 +183,10 @@ Follow the prompts:
 
 🧩 Example Mapping File (species_mapping.tsv)
 ```bash
-amex    Astyanax_mexicanus
-danio   Danio_rerio
-cato    Catopsilia_crocale
+ame    Astyanax mexicanus
+dre   Danio rerio
+cpo    Catopsilia pomona
+
 ```
 
 📂 Output Structure

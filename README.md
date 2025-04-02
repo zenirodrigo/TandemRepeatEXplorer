@@ -197,8 +197,11 @@ cpo    Catopsilia pomona
 .
 
 ├── final.fasta                    # Concatenated motifs
+
 ├── output.tsv                     # Annotated sequences
+
 ├── reference_motifs_*.fasta       # Per-library motif files
+
 └── final.fasta.nr0.*.sel.fasta    # CD-HIT filtered results
 
 🛠️ Key Features

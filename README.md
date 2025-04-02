@@ -5,7 +5,7 @@
 
 
 <p align="center">
-  <img src="social-preview.png" width="200" alt="Ícone do Repositório">
+  <img src="social-preview.png" width="100" alt="Ícone do Repositório">
 </p>
 
 

@@ -4,7 +4,7 @@
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
 # This repository is called T-REx and contains three scripts  🦖🧬:
-
+![Logo do TREx](T-REx.jpeg)
 -   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
 -   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
 -   MonoMiner.py: An automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.

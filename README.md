@@ -5,11 +5,11 @@
 
 # This repository contains two scripts:
 
--   Zeni_repgen.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
--   Zeni_annot_gffbed.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
+-   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
+-   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## Zeni_repgen.sh - Genome Repeat Analysis Pipeline
+## ArrayScope.sh - Genome Repeat Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
@@ -69,7 +69,7 @@ pip install biopython pandas matplotlib seaborn
 Run the script by executing:
 
 ```bash
-bash Zeni_repgen.sh
+bash ArrayScope.sh
 ```
 
 During execution, the script will prompt the user to input the threshold for filtering sequences. This value will be used dynamically throughout the script.
@@ -85,7 +85,7 @@ This threshold will be applied throughout the analysis, influencing clustering a
 
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## Zeni_annot_gffbed.sh -  BLAST Analysis and GFF Comparison in genomes assembled
+## SatFlank.sh -  BLAST Analysis and GFF Comparison in genomes assembled
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
@@ -121,7 +121,7 @@ sudo apt update && sudo apt install ncbi-blast+ seqtk parallel
 ## Usage
 Run the script and follow the interactive instructions:
 ```bash
-bash script.sh
+bash SatFlank.sh
 ```
 The user will need to provide:
 1. **genome file** (FASTA)
@@ -137,7 +137,7 @@ The user will need to provide:
 
 ## Execution Example
 ```bash
-bash Zeni_annot_gffbed.sh
+bash SatFlank.sh
 ```
 And provide the required inputs as prompted.
 

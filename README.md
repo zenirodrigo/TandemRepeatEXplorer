@@ -4,11 +4,8 @@
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
 
-<p align="right">
-  <img src="social-preview.png" width="150" alt="Ícone do Repositório">
-</p>
 
-
+<img align="right" src="social-preview.png" width="150" alt="Ícone do Repositório">
 # This repository is also called T-REx and contains three scripts for analyzing tandem sequences using genome (the first two scripts) and short reads (monoMiner) 🦖🧬:
 -   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
 -   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
@@ -81,15 +78,6 @@ Run the script by executing:
 ```bash
 bash ArrayScope.sh
 ```
-
-During execution, the script will prompt the user to input the threshold for filtering sequences. This value will be used dynamically throughout the script.
-
-## Example
-Upon execution, the script will ask for a filtering threshold:
-```bash
-Enter the sequence filtering threshold: 10
-```
-This threshold will be applied throughout the analysis, influencing clustering and output files.
 
 
 

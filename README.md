@@ -17,6 +17,7 @@ A Bash and Python pipeline for identifying and visualizing satellite DNA arrays 
 
 ---
 
+
 ## Features
 - Processes multiple genome files and reference sequences
 - Automated BLAST analysis with configurable parameters
@@ -42,6 +43,11 @@ Before running the script, ensure that the required dependencies are installed:
 sudo apt-get install bedtools
 pip install biopython pandas matplotlib seaborn
 ```
+
+git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
+cd TandemRepeatEXplorer
+
+
 
 ---
 

@@ -13,7 +13,7 @@
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
-A Bash/Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
+A Bash and Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
 
 ---
 

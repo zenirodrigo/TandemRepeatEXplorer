@@ -8,9 +8,9 @@
 
 
 ## This repository is also called T-REx and contains three scripts for analyzing tandem sequences using genome (the first two scripts) and short reads (monoMiner)🦖🧬:
-   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
-   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
-   MonoMiner.py: An automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
+   - ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
+   - SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
+   - MonoMiner.py: An automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
 
 
 

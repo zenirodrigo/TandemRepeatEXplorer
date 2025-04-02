@@ -220,10 +220,11 @@ This project is licensed under the MIT License
 ## Acknowledgments
 - Heng Li, Ole Tange, NCBI team, and BEDTools team for developing essential bioinformatics tools.
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
-![Repository Icon](social-preview.png)
 - This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
 
 ## ⁉️ Contact
 For questions or improvements, contact rodrigo-zeni@outlook.com.br.
+
+![Repository Icon](social-preview.png)
 
 

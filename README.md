@@ -195,6 +195,7 @@ cpo    Catopsilia pomona
 
 📂 Output Structure
 .
+
 ├── final.fasta                    # Concatenated motifs
 ├── output.tsv                     # Annotated sequences
 ├── reference_motifs_*.fasta       # Per-library motif files

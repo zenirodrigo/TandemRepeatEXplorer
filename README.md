@@ -214,7 +214,7 @@ cpo    Catopsilia pomona
 
 ## 📜 License
 
-his project is licensed under the MIT License
+This project is licensed under the MIT License
 
 ## Acknowledgments
 - Heng Li, Ole Tange, NCBI team, and BEDTools team for developing essential bioinformatics tools.

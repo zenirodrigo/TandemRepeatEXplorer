@@ -205,11 +205,12 @@ cpo    Catopsilia pomona
 └── final.fasta.nr0.*.sel.fasta    # CD-HIT filtered results
 
 🛠️ Key Features
-TAB autocompletion for file paths
-Parallel processing
-Adjustable similarity threshold (similarity_threshold)
-CD-HIT integration for duplicate removal
-TSV output for downstream analysis
+
+- TAB autocompletion for file paths
+- Parallel processing
+- Adjustable similarity threshold (similarity_threshold)
+- CD-HIT integration for duplicate removal
+- TSV output for downstream analysis
 
 📜 License
 his project is licensed under the MIT License

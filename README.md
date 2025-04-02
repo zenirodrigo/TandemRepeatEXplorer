@@ -40,14 +40,12 @@ A Bash and Python pipeline for identifying and visualizing satellite DNA arrays 
 Before running the script, ensure that the required dependencies are installed:
 
 ```bash
-sudo apt-get install bedtools
-pip install biopython pandas matplotlib seaborn
-```
-
 git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
 cd TandemRepeatEXplorer
 
-
+sudo apt-get install bedtools
+pip install biopython pandas matplotlib seaborn
+```
 
 ---
 
@@ -159,7 +157,7 @@ And provide the required inputs as prompted.
    git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
    cd TandemRepeatEXplorer
    
-3. **Install CD-HIT (required)**:
+2. **Install CD-HIT (required)**:
 
 Follow instructions at [CD-HIT](https://github.com/weizhongli/cdhit) Official Repository
 

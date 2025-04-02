@@ -4,7 +4,7 @@
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 <table>
   <tr>
-    <!-- Coluna do texto -->
+
     <td>
       <h2>This repository is also called T-REx and contains three scripts 
       for analyzing tandem sequences using genome (the first two scripts) 

@@ -185,7 +185,7 @@ Follow the prompts:
 > Minimum copies for CD-HIT: 5
 ```
 
-🧩 Example Mapping File (species_mapping.tsv)
+## 🧩 Example Mapping File (species_mapping.tsv)
 ```bash
 ame    Astyanax mexicanus
 dre   Danio rerio
@@ -193,7 +193,7 @@ cpo    Catopsilia pomona
 
 ```
 
-📂 Output Structure
+## 📂 Output Structure
 .
 
 ├── final.fasta                    # Concatenated motifs
@@ -204,7 +204,7 @@ cpo    Catopsilia pomona
 
 └── final.fasta.nr0.*.sel.fasta    # CD-HIT filtered results
 
-🛠️ Key Features
+## 🛠️ Key Features
 
 - TAB autocompletion for file paths
 - Parallel processing
@@ -212,7 +212,8 @@ cpo    Catopsilia pomona
 - CD-HIT integration for duplicate removal
 - TSV output for downstream analysis
 
-📜 License
+## 📜 License
+
 his project is licensed under the MIT License
 
 ## Acknowledgments
@@ -220,7 +221,7 @@ his project is licensed under the MIT License
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
 - This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
 
-⁉️ Contact
+## ⁉️ Contact
 For questions or improvements, contact rodrigo-zeni@outlook.com.br.
 
 

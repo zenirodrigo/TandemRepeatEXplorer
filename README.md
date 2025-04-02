@@ -3,10 +3,11 @@
 [![Shell Script](https://img.shields.io/badge/Shell_Script-Compatible-brightgreen?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-# This repository is called T-REx and contains two scripts:
+# This repository is called T-REx and contains two scripts  🦖🧬:
 
 -   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
 -   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
+-   MonoMiner.py: An automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## ArrayScope.sh - Genome Repeat Analysis Pipeline
@@ -143,12 +144,74 @@ And provide the required inputs as prompted.
 
 ---
 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## MonoMiner.py - Genome Repeat Analysis Pipeline
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## 📥 Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
+   cd TandemRepeatEXplorer
+   
+3. **Install CD-HIT (required)**:
+
+Follow instructions at [CD-HIT](https://github.com/weizhongli/cdhit) Official Repository
+
+
+Ensure cd_hit_filter_size.py is in your PATH.
+
+
+Usage:
+
+Step 1: Prepare Files
+Reference: A .fasta file with the reference sequence.
+
+Libraries: Place .fq files in the project folder.
+
+Mapping: A .tsv file linking codes to species (example below).
+
+Step 2: Run the Pipeline
+```bash
+python3 monoMiner.py
+```
+Follow the prompts:
+```bash
+> Enter mapping file path: species_mapping.tsv
+> Enter reference sequence: examples/reference.fasta
+> Minimum copies for CD-HIT: 5
+```
+
+🧩 Example Mapping File (species_mapping.tsv)
+```bash
+amex    Astyanax_mexicanus
+danio   Danio_rerio
+cato    Catopsilia_crocale
+```
+
+📂 Output Structure
+.
+├── final.fasta                    # Concatenated motifs
+├── output.tsv                     # Annotated sequences
+├── reference_motifs_*.fasta       # Per-library motif files
+└── final.fasta.nr0.*.sel.fasta    # CD-HIT filtered results
+
+🛠️ Key Features
+TAB autocompletion for file paths
+Parallel processing
+Adjustable similarity threshold (similarity_threshold)
+CD-HIT integration for duplicate removal
+TSV output for downstream analysis
+
+📜 License
+his project is licensed under the MIT License
+
 ## Acknowledgments
 - Heng Li, Ole Tange, NCBI team, and BEDTools team for developing essential bioinformatics tools.
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
 - This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
 
-## Contact
+⁉️ Contact
 For questions or improvements, contact rodrigo-zeni@outlook.com.br.
 
 

@@ -3,7 +3,7 @@
 [![Shell Script](https://img.shields.io/badge/Shell_Script-Compatible-brightgreen?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-# This repository contains two scripts:
+# This repository is called T-REx and contains two scripts:
 
 -   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
 -   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.

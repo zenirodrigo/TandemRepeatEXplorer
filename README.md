@@ -4,6 +4,11 @@
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
 
+<p align="center">
+  <img src="social-preview.png" width="200" alt="Ícone do Repositório">
+</p>
+
+
 # This repository is called T-REx and contains three scripts  🦖🧬:
 -   ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
 -   SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.

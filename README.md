@@ -132,7 +132,7 @@ Danio rerio
 
 ## ▶️ Usage
 ```bash
-bash gene_extractor.sh BRCA1 species_list.txt
+bash gene_extractor.sh BRCA1 especies.txt
 ```
 This will generate FASTA files like:
 

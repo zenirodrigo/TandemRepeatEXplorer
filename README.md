@@ -21,7 +21,7 @@ A Bash and Python pipeline for identifying and visualizing satellite DNA arrays 
 ---
 
 
-## Features
+## ✅  Features
 - Processes multiple genome files and reference sequences
 - Automated BLAST analysis with configurable parameters
 - Merges adjacent repeats within 2000bp

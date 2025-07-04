@@ -6,12 +6,13 @@
 
 ## This repository is also called T-REx and contains four scripts for analyzing tandem sequences using genome (the first two scripts) and short reads (monoMiner)🦖🧬
 
-   - ArrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
-   - SatFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
-   - MonoMiner.py: An automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
+   - arrayScope.sh: A script for characterizing and locating tandem repeat arrays in assembled genomes.
+   - satFlank.sh: A script for studying the neighborhood of arrays using the assembled genome and its annotation.
+   - monoMiner.py: An automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
+   - gene_extractor.sh This script automates the retrieval and extraction of the genomic sequence of a specific gene across multiple species using NCBI tools 
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## ArrayScope.sh - Genome Repeat Analysis Pipeline
+## arrayScope.sh - Genome Repeat Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
@@ -154,7 +155,7 @@ For each species, you’ll see messages like:
 ```
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## SatFlank.sh -  BLAST Analysis and GFF Comparison in genomes assembled
+## satFlank.sh -  BLAST Analysis and GFF Comparison in genomes assembled
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
@@ -213,7 +214,7 @@ And provide the required inputs as prompted.
 ---
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## MonoMiner.py - Genome Repeat Analysis Pipeline
+## monoMiner.py - Genome Repeat Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## 📥 Installation
 

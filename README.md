@@ -82,10 +82,10 @@ bash ArrayScope.sh
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## gene_extractor.sh – Extract Gene Sequences from NCBI by Species
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+## Description
 This script automates the retrieval of genomic sequences for a given gene across multiple species using NCBI's E-utilities and datasets CLI. It fetches genomic coordinates when available, or falls back to transcriptomic data when necessary.
 
-✅ Features
+## ✅ Features
 - Searches for Gene ID using gene symbol and species name
 
 - Extracts genomic coordinates directly from NCBI
@@ -100,22 +100,24 @@ This script automates the retrieval of genomic sequences for a given gene across
 
 📊 Logs useful information: coordinates, exon count, sequence size
 
-⚙️ Requirements
+
+---
+
+
+## 🛠️ Dependencies
 Install the required tools via Conda:
 ```bash
 conda install -c bioconda entrez-direct datasets-cli seqkit
 ```
 Ensure the following are available in your environment:
 
-esearch, efetch, esummary, xtract (Entrez Direct)
-
-datasets CLI from NCBI
-
-seqkit
 
 Standard UNIX tools: unzip, cut, sed, find, head
 
-📥 Inputs
+
+---
+
+## 📂 Inputs files:
 A gene symbol (e.g., BRCA1)
 
 A text file with one species per line:
@@ -124,7 +126,7 @@ Homo sapiens
 Mus musculus
 Danio rerio
 
-▶️ Usage
+## ▶️ Usage
 ```bash
 bash gene_extractor.sh BRCA1 species_list.txt
 ```
@@ -137,7 +139,10 @@ BRCA1_Danio_rerio.fasta
 🧪 Fallback Mode
 If genomic coordinates cannot be extracted, the script automatically switches to RNA download mode using NCBI Datasets. It unpacks the archive and extracts the first available .fna file. This ensures recovery even for less-annotated organisms.
 
-📌 Output Overview
+
+---
+
+## 📂 Outputs files:
 For each species, you’ll see messages like:
 ```bash
 🔍 Searching for gene BRCA1 in Homo sapiens...
@@ -147,6 +152,7 @@ For each species, you’ll see messages like:
 ✅ Saved as BRCA1_Homo_sapiens.fasta
 🔄 Strand: reverse
 ```
+
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## SatFlank.sh -  BLAST Analysis and GFF Comparison in genomes assembled
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -210,13 +210,6 @@ The user will need to provide:
 7. **`.gff` file for comparison**
 8. **Final analysis GFF output file name**
 
----
-
-## Execution Example
-```bash
-bash SatFlank.sh
-```
-And provide the required inputs as prompted.
 
 ---
 

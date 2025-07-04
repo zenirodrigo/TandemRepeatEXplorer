@@ -124,8 +124,11 @@ A gene symbol (e.g., BRCA1)
 A text file with one species per line:
 
 Homo sapiens
+
 Mus musculus
+
 Danio rerio
+
 
 ## ▶️ Usage
 ```bash

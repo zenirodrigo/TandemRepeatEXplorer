@@ -79,8 +79,74 @@ bash ArrayScope.sh
 ```
 
 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## gene_extractor.sh – Extract Gene Sequences from NCBI by Species
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+This script automates the retrieval of genomic sequences for a given gene across multiple species using NCBI's E-utilities and datasets CLI. It fetches genomic coordinates when available, or falls back to transcriptomic data when necessary.
 
+✅ Features
+- Searches for Gene ID using gene symbol and species name
+
+- Extracts genomic coordinates directly from NCBI
+
+- Fallback to RNA FASTA when coordinates are missing
+
+- Downloads sequences with efetch from GenBank
+
+- Auto-detects and reverse-complements negative strands
+
+- Outputs FASTA files named per gene and species
+
+📊 Logs useful information: coordinates, exon count, sequence size
+
+⚙️ Requirements
+Install the required tools via Conda:
+```bash
+conda install -c bioconda entrez-direct datasets-cli seqkit
+```
+Ensure the following are available in your environment:
+
+esearch, efetch, esummary, xtract (Entrez Direct)
+
+datasets CLI from NCBI
+
+seqkit
+
+Standard UNIX tools: unzip, cut, sed, find, head
+
+📥 Inputs
+A gene symbol (e.g., BRCA1)
+
+A text file with one species per line:
+
+Homo sapiens
+Mus musculus
+Danio rerio
+
+▶️ Usage
+```bash
+bash gene_extractor.sh BRCA1 species_list.txt
+```
+This will generate FASTA files like:
+
+BRCA1_Homo_sapiens.fasta
+BRCA1_Mus_musculus.fasta
+BRCA1_Danio_rerio.fasta
+
+🧪 Fallback Mode
+If genomic coordinates cannot be extracted, the script automatically switches to RNA download mode using NCBI Datasets. It unpacks the archive and extracts the first available .fna file. This ensures recovery even for less-annotated organisms.
+
+📌 Output Overview
+For each species, you’ll see messages like:
+```bash
+🔍 Searching for gene BRCA1 in Homo sapiens...
+🧠 Gene ID found: 672
+🗺️ Coordinates: NC_000017.11:43044294-43125483 (Exons: 24)
+🌐 Downloading sequence...
+✅ Saved as BRCA1_Homo_sapiens.fasta
+🔄 Strand: reverse
+```
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## SatFlank.sh -  BLAST Analysis and GFF Comparison in genomes assembled
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

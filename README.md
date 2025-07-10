@@ -52,6 +52,8 @@ cd TandemRepeatEXplorer
 
 sudo apt-get install bedtools
 pip install biopython pandas matplotlib seaborn
+conda install -c conda-forge parallel
+
 ```
 
 ---

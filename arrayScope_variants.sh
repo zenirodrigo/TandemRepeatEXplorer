@@ -115,12 +115,12 @@ for input_biblio in $input_biblios; do
 
 python3 - <<EOF
 import os
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import SeqIO
 import re
-import hashlib
 
 def read_bed(filepath):
     df = pd.read_csv(filepath, sep='\t', header=None, names=['Chromosome', 'Start', 'End', 'Reference'])
@@ -160,28 +160,15 @@ def merge_intervals(df):
             merged.append([chrom, current_start, current_end, list(refs)])
     return pd.DataFrame(merged, columns=['Chromosome', 'Start', 'End', 'References'])
 
-distinct_colors = [
-    (0.90, 0.12, 0.12), (0.12, 0.55, 0.12), (0.12, 0.12, 0.90), (0.90, 0.75, 0.12),
-    (0.54, 0.17, 0.89), (0.89, 0.47, 0.20), (0.20, 0.89, 0.67), (0.20, 0.67, 0.89),
-    (0.67, 0.20, 0.89), (0.89, 0.20, 0.67), (0.0, 0.5, 0.0),   (0.5, 0.0, 0.5),
-    (0.0, 0.8, 0.8),   (0.8, 0.0, 0.0),   (0.3, 0.7, 0.9),   (0.9, 0.6, 0.0),
-    (0.4, 0.2, 0.6),   (0.7, 0.3, 0.3),   (0.1, 0.9, 0.1),   (0.6, 0.4, 0.8),
-    (0.95, 0.9, 0.1),  (0.8, 0.5, 0.9),   (0.5, 0.5, 0.5),   (0.0, 0.3, 0.6),
-    (0.9, 0.7, 0.4),   (0.2, 0.8, 0.2),   (0.7, 0.0, 0.7),   (0.4, 0.6, 0.2),
-    (0.9, 0.2, 0.5),   (0.3, 0.4, 0.9),   (0.6, 0.1, 0.1),   (0.1, 0.6, 0.6),
-    (0.9, 0.4, 0.6),   (0.5, 0.3, 0.0),   (0.8, 0.8, 0.0),   (0.0, 0.7, 0.3),
-    (0.7, 0.5, 0.0),   (0.29, 0.0, 0.51), (1.0, 0.41, 0.71), (0.0, 0.0, 0.4),
-    (0.8, 0.2, 0.8),   (0.4, 0.0, 0.0),   (0.6, 0.8, 0.2),   (0.2, 0.2, 0.2),
-    (0.94, 0.94, 0.86),(0.5, 0.0, 0.0),   (0.82, 0.71, 0.55),(0.9, 0.0, 0.9),
-    (0.0, 0.5, 0.5)
-]
-big_palette = distinct_colors
-num_colors = len(big_palette)
+# Arquivo de cores persistente
+color_file = "reference_colors.json"
 
-def get_color_for_ref(ref):
-    h = hashlib.md5(ref.encode('utf-8')).hexdigest()
-    idx = int(h, 16) % num_colors
-    return big_palette[idx]
+# Carregar ou criar mapa de cores persistente
+if os.path.exists(color_file):
+    with open(color_file, 'r') as f:
+        color_map = json.load(f)
+else:
+    color_map = {}
 
 fasta_file = "$temp_genome"
 bed_file = "$genome_name/valid_monomers.bed"
@@ -193,7 +180,21 @@ df_merged = merge_intervals(df_filtered)
 
 bed_refs = df_merged['References'].explode().unique()
 all_refs = sorted(bed_refs, key=natural_sort_key)
-color_map = {r: get_color_for_ref(r) for r in all_refs}
+
+# Atualizar color_map com novas referências, se necessário
+missing_refs = [r for r in all_refs if r not in color_map]
+if missing_refs:
+    new_palette = sns.color_palette("hls", len(missing_refs))
+    for i, ref in enumerate(missing_refs):
+        rgb = new_palette[i]
+        color_map[ref] = tuple(rgb)
+
+# Salvar mapa de cores atualizado
+with open(color_file, 'w') as f:
+    json.dump(color_map, f)
+
+# Converter cores para uso no matplotlib
+color_map = {k: tuple(v) for k, v in color_map.items()}
 
 reference_sizes = {}
 for ref in all_refs:
@@ -203,7 +204,7 @@ for ref in all_refs:
 
 sorted_chromosomes = sorted(chromosome_lengths.keys(), key=natural_sort_key)
 
-# FIGURA 1
+# FIGURA 1 - Mapa linear dos cromossomos
 plt.figure(figsize=(36, 24))
 spacing = 1.5
 for idx, chrom in enumerate(sorted_chromosomes):
@@ -241,7 +242,7 @@ plt.grid(False)
 plt.tight_layout()
 plt.savefig("$genome_name/chromosomes_with_annotations.png", dpi=300, bbox_inches='tight')
 
-# FIGURA 2
+# FIGURA 2 - Heatmap
 df_exploded = df_merged.explode('References')
 df_exploded['Size'] = df_exploded['End'] - df_exploded['Start']
 heatmap_data = df_exploded.groupby(['Chromosome', 'References'])['Size'].sum().unstack()
@@ -255,7 +256,7 @@ plt.xticks(rotation=60)
 plt.tight_layout()
 plt.savefig("$genome_name/array_frequency_heatmap.png", dpi=300, bbox_inches='tight')
 
-# FIGURA 3
+# FIGURA 3 - Dispersão
 df_exploded['Chromosome'] = pd.Categorical(df_exploded['Chromosome'], categories=sorted_chromosomes, ordered=True)
 plt.figure(figsize=(12, 8))
 sns.scatterplot(data=df_exploded, x='Chromosome', y='Size', hue='References', hue_order=all_refs, palette=color_map, alpha=0.7, s=100)
@@ -271,4 +272,3 @@ plt.savefig("$genome_name/array_chromosome_vs_size_scatter.png", dpi=300, bbox_i
 print("Visualization plots saved.")
 EOF
 done
-

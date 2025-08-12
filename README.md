@@ -134,6 +134,22 @@ sudo apt-get install blast2 seqtk parallel
 ```bash
 bash satFlank.sh
 ```
+You will be prompted to enter:
+1. Library file name (FASTA)
+2. Reference file name (FASTA)
+3. Number of times to multiply the reference sequence
+4. BLAST output file name
+5. Output file name for extracted sequences
+6. Number of CPU cores for parallel processing
+7. GFF file name
+8. Final output file name for GFF analysis
+
+---
+
+## 📌 Notes & Best Practices
+- Use biologically relevant reference sequences for better BLAST detection
+- Ensure the `.gff` file matches the genome assembly used in the library file
+
 
 ---
 
@@ -148,28 +164,71 @@ Automated Python pipeline for motif mining from sequencing libraries.
 - Standard Python libraries
 - FASTQ sequencing files
 - Mapping file (TSV: species_code → species_name)
+- **Install CD-HIT (required)**:
+
+Follow instructions at [CD-HIT](https://github.com/weizhongli/cdhit) Official Repository
+
+
+Ensure cd_hit_filter_size.py is in your PATH.
+
 
 ### 🚀 Usage
+Step 1: Prepare Files
+Reference: A .fasta file with the reference sequence.
+
+Libraries: Place .fq files in the project folder.
+
+Mapping: A .tsv file linking codes to species (example below).
+
+Step 2: Run the Pipeline
+```bash
+python3 monoMiner.py
+```
+Follow the prompts:
+```bash
+> Enter mapping file path: species_mapping.tsv
+> Enter reference sequence: examples/reference.fasta
+> Minimum copies for CD-HIT: 2
+```
+
+##  Example Mapping File (species_mapping.tsv)
+```bash
+ame    Astyanax mexicanus
+dre   Danio rerio
+cpo    Catopsilia pomona
+
+```
+
 ```bash
 python3 monoMiner.py
 ```
 
-**Example mapping file:**
-```text
-ame    Astyanax mexicanus
-dre    Danio rerio
-cpo    Catopsilia pomona
-```
+## 📂 Output Structure
+.
+
+├── final.fasta                    # Concatenated motifs
+
+├── output.tsv                     # Annotated sequences
+
+├── reference_motifs_*.fasta       # Per-library motif files
+
+└── final.fasta.nr0.*.sel.fasta    # CD-HIT filtered results
+
+
 
 ---
 
 ## 📜 License
-MIT License
 
-## 🙌 Acknowledgments
-Heng Li, Ole Tange, NCBI team, BEDTools team  
-Universidade Estadual Paulista (UNESP)  
-FAPESP PhD fellowship
+This project is licensed under the MIT License
 
-## 📬 Contact
+## Acknowledgments
+- Heng Li, Ole Tange, NCBI team, and BEDTools team for developing essential bioinformatics tools.
+- Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
+- This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
+
+## ⁉️ Contact
+For questions or improvements, contact:
+**rodrigo.zeni@unesp.br**
+or
 **rodrigo-zeni@outlook.com.br**

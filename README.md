@@ -5,6 +5,10 @@
 <img align="right" src="social-preview.png" width="150" alt="Repository Icon">
 
 # T-REx – Tandem Repeat Explorer 🦖🧬
+#
+#
+#
+#
 
 This repository, also called **T-REx**, contains four scripts for analyzing tandem sequences from genomes (first two scripts) and short reads (**monoMiner**):
 

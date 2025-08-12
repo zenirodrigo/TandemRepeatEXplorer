@@ -15,7 +15,7 @@
 ## arrayScope.sh - Genome Repeat Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# ArrayScope.sh – Genome Repeat Analysis Pipeline
+# arrayScope.sh – Genome Repeat Analysis Pipeline
 
 ##  Description
 **ArrayScope** is a **Bash + Python** pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.  

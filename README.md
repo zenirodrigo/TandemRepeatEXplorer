@@ -65,33 +65,51 @@ pip install biopython pandas matplotlib seaborn
 
 ---
 
-## 📂 Inputs files:
-- Genome assemblies
-- Reference monomer sequences
-- Parameters: sequence count, repeat multiplier
+## 📂 Input Files
+1. **Genome assemblies** (FASTA format)  
+2. **Reference monomers** (FASTA format, typically satDNA monomers or other tandem repeats)  
 
 ---
 
-## 📂 Outputs files:
-- BED files with merged repeat regions
-- Publication-quality plots (PNG/PDF):
+## 📂 Output Files
+For each genome, the script will create a folder containing:
 
-
-- chromosomes_with_annotations.*png and pdf
-
-- array_frequency_heatmap.png
-
-- array_chromosome_vs_size_scatter.png
+- `valid_monomers.bed` → merged repeat coordinates  
+- `chromosomes_with_annotations.png` → chromosome-scale distribution map  
+- `array_frequency_heatmap.png` → abundance heatmap per chromosome/reference  
+- `array_chromosome_vs_size_scatter.png` → scatter plot of array sizes  
 
 ---
 
-## Usage
-Run the script by executing:
-
+##  Usage
+Run the script:
 ```bash
 bash ArrayScope.sh
 ```
 
+You will be prompted to enter:
+1. **Genome file names** (space-separated) – e.g. `genome1.fasta genome2.fasta`  
+2. **Number of chromosome sequences to use** – Limits the analysis to the first *N* sequences in the FASTA  
+3. **Reference monomer files** (space-separated) – e.g. `sat1.fasta sat2.fasta`  
+4. **Minimum number of monomers to define an array** (`multiplier`) – e.g. `4` means 4 or more monomers in tandem  
+5. **Number of threads** for parallel BLAST searches – e.g. `8`  
+
+**Example run:**
+```
+Enter genome file names (space-separated): genome1.fasta genome2.fasta
+How many chromosomes sequences will be used? 24
+Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): sat1.fasta sat2.fasta
+How many monomers will be used to create a array (here is the minimum monomers to form a array in this study)? 4
+Quantas threads deseja utilizar? (ex: 4, 8, etc.): 8
+```
+
+---
+
+## 📌 Notes & Best Practices
+- Place genome and reference FASTA files in the same directory before running  
+- Use consistent sequence names in genome FASTAs for clear labeling in plots  
+- If working with variants, follow the underscore `_` naming rule and use the `_variants` script  
+- Large genomes or many references may require high RAM and multiple threads  
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## gene_extractor.sh – Extract Gene Sequences from NCBI by Species

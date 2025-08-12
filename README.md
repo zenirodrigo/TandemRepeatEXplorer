@@ -16,14 +16,12 @@
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ## Description
-A Bash and Python pipeline for identifying and visualizing satellite DNA arrays in genomes.
+ArrayScope is a Bash + Python pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.
+It processes multiple genomes and reference monomers, runs BLAST, merges nearby repeat regions (< 2000 bp apart), and generates high-quality plots for chromosome-scale visualization.
 
----
-## PS:
-If you have variants in your input files — for example, two variants of the same satellite DNA or the same gene from different species — use the arrayScope_variants.sh script and include an underscore _ in the name of each variant.
-For example: ppfia1_Astyanax_mexicanus.fasta and ppfia1_Psalidodon_paranae.fasta.
-
-The script will interpret everything before the first underscore as the same element, treating both sequences as ppfia1, in this case.
+💡 If you have variants in your reference files — for example, two slightly different monomers or the same repeat from different species — use the arrayScope_variants.sh script and include an underscore _ in the filename.
+Example:
+ppfia1_Astyanax_mexicanus.fasta and ppfia1_Psalidodon_paranae.fasta will both be treated as ppfia1.
 
 ## ✅  Features
 - Processes multiple genome files and reference sequences

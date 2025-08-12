@@ -144,7 +144,6 @@ You will be prompted to enter:
 7. GFF file name
 8. Final output file name for GFF analysis
 
----
 
 ## 📌 Notes & Best Practices
 - Use biologically relevant reference sequences for better BLAST detection

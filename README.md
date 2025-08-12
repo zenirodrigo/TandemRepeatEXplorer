@@ -4,7 +4,7 @@
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 <img align="right" src="social-preview.png" width="150" alt="Repository Icon">
 
-T-REx – Tandem Repeat Explorer 🦖🧬
+#T-REx – Tandem Repeat Explorer 🦖🧬
 
 
 This repository, also called **T-REx**, contains four scripts for analyzing tandem sequences from genomes (first two scripts) and short reads (**monoMiner**):

@@ -189,62 +189,89 @@ For each species, you’ll see messages like:
 ```
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## satFlank.sh -  BLAST Analysis and GFF Comparison in genomes assembled
+## satFlank.sh -  SatelliteDNA Flank Extraction and Gene Overlap Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-## Description
-This script automates the process of:
-1. **BLAST Analysis**: Searches sequences in a library using BLAST and generates a `.bed` file with valid monomer intervals.
-2. **Filtering the `.bed` File**: Retains only the largest overlapping regions to avoid redundancy.
-3. **Sequence Extraction**: Uses `seqtk` to extract filtered sequences.
-4. **Comparison with GFF**: Analyzes gene annotations for the identified regions, generating a final report.
+
+##  Description
+**satFlank.sh** is a **Bash** pipeline designed to identify satellite DNA flanking regions using BLAST, extract sequences, and compare them with genomic annotations in GFF format to find overlapping genes.
+
+---
+
+## ✅ Features
+- Multiplies reference sequence to improve BLAST detection of tandem repeats
+- Runs **BLAST+** to identify flanking regions
+- Generates and filters `.bed` files to keep the largest non-overlapping regions
+- Extracts sequences with **seqtk**
+- Compares `.bed` coordinates with a **GFF** file to find overlapping genes
+- Supports **parallel processing** for faster analysis
 
 ---
 
 ## 🛠️ Dependencies
-Before running the script, make sure you have installed:
-- `BLAST+`
-- `seqtk`
-- `awk`
-- `parallel`
+- **BLAST+** (`makeblastdb`, `blastn`)
+- **seqtk**
+- **GNU parallel**
+- **awk**, **sed**
+- **GFF file** with gene annotations
 
-To install these tools on Debian/Ubuntu-based systems:
+**Quick install example (Ubuntu/Debian):**
 ```bash
-sudo apt update && sudo apt install ncbi-blast+ seqtk parallel
+sudo apt-get install blast2 seqtk parallel
 ```
 
 ---
 
-##📂 Outputs
-- `valid_monomers.filtered.bed`: `.bed` file with filtered intervals.
-- `<output_seqtk>`: FASTA file with extracted sequences.
-- `<final_file>`: Tabular file containing annotated genes in the identified regions.
+## 📂 Input Files
+1. **Library file** (FASTA) – genome or chromosome sequences
+2. **Reference sequence** (FASTA) – target monomer or repeat
+3. **GFF file** – genome annotation
 
 ---
 
-## Usage
-Run the script and follow the interactive instructions:
+## 📂 Output Files
+- `monomeros_validos.filtrado.bed` → filtered BED with non-overlapping regions
+- Extracted sequences in FASTA format
+- Final gene overlap table (TSV)
+
+---
+
+##  Usage
+Run the script:
 ```bash
-bash SatFlank.sh
+bash satFlank.sh
 ```
-The user will need to provide:
-1. **genome file** (FASTA)
-2. **Reference file** (FASTA)
-3. **Reference sequence multiplier**
-4. **BLAST output file**
-5. **Output file for sequence extraction**
-6. **Number of cores for parallel processing**
-7. **`.gff` file for comparison**
-8. **Final analysis GFF output file name**
 
+You will be prompted to enter:
+1. Library file name (FASTA)
+2. Reference file name (FASTA)
+3. Number of times to multiply the reference sequence
+4. BLAST output file name
+5. Output file name for extracted sequences
+6. Number of CPU cores for parallel processing
+7. GFF file name
+8. Final output file name for GFF analysis
 
 ---
+
+## 📌 Notes & Best Practices
+- Use biologically relevant reference sequences for better BLAST detection
+- Ensure the `.gff` file matches the genome assembly used in the library file
+
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## monoMiner.py - Genome Repeat Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## 📥 Installation
 
+## 🛠️ Dependencies
+
+- **Python 3**
+- **cd_hit_filter_size.py** in PATH
+- Standard Python libraries: `os`, `glob`, `re`, `subprocess`, `concurrent.futures`
+- FASTQ sequencing files (`.fq`)
+- Mapping file (TSV: species_code → species_name)
+
+  
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
@@ -297,6 +324,8 @@ cpo    Catopsilia pomona
 
 └── final.fasta.nr0.*.sel.fasta    # CD-HIT filtered results
 
+
+
 ## 🛠️ Key Features
 
 - TAB autocompletion for file paths
@@ -304,6 +333,10 @@ cpo    Catopsilia pomona
 - Adjustable similarity threshold (similarity_threshold)
 - CD-HIT integration for duplicate removal
 - TSV output for downstream analysis
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 ## 📜 License
 

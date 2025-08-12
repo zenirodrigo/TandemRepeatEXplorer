@@ -36,7 +36,7 @@ It processes multiple genomes and reference monomers, runs **[BLAST+](https://bl
 
 ### 🛠️ Dependencies
 - **BLAST+** (`makeblastdb`, `blastn`)
-- **GNU parallel**
+- **[GNU parallel](https://www.gnu.org/software/parallel/)**
 - **Python 3** with:
   - [BioPython](https://biopython.org/)
   - [pandas](https://pandas.pydata.org/)

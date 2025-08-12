@@ -15,42 +15,51 @@
 ## arrayScope.sh - Genome Repeat Analysis Pipeline
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-## Description
-ArrayScope is a Bash + Python pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.
-It processes multiple genomes and reference monomers, runs BLAST, merges nearby repeat regions (< 2000 bp apart), and generates high-quality plots for chromosome-scale visualization.
+# ArrayScope.sh – Genome Repeat Analysis Pipeline
 
-💡 If you have variants in your reference files — for example, two slightly different monomers or the same repeat from different species — use the arrayScope_variants.sh script and include an underscore _ in the filename.
-Example:
-ppfia1_Astyanax_mexicanus.fasta and ppfia1_Psalidodon_paranae.fasta will both be treated as ppfia1.
+##  Description
+**ArrayScope** is a **Bash + Python** pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.  
+It processes multiple genomes and reference monomers, runs **BLAST**, merges nearby repeat regions (< 2000 bp apart), and generates high-quality plots for chromosome-scale visualization.
 
-## ✅  Features
-- Processes multiple genome files and reference sequences
-- Automated BLAST analysis with configurable parameters
-- Merges adjacent repeats within 2000bp
-- Generates three visualization types:
-- Chromosome-scale repeat distribution
-- Heatmap of repeat prevalence
-- Scatter plot of repeat sizes
-- Handles common FASTA formats (.fa, .fna, .fasta)
+> 💡 If you have **variants** in your reference files — for example, two slightly different monomers or the same repeat from different species — use the `arrayScope_variants.sh` script and **include an underscore `_` in the filename**.  
+> Example:  
+> `ppfia1_Astyanax_mexicanus.fasta` and `ppfia1_Psalidodon_paranae.fasta` will both be treated as **ppfia1**.
+
+---
+
+## ✅ Features
+- Processes **multiple genome assemblies** and reference monomer files at once  
+- Fully automated **BLAST** analysis with configurable parameters  
+- Merges nearby repeat hits (< 2000 bp apart)  
+- Generates **three publication-quality visualizations**:
+  1. Chromosome-scale repeat distribution (linear map)  
+  2. Heatmap of total base pairs per chromosome/reference  
+  3. Scatter plot of array sizes by chromosome  
+- Handles common FASTA formats: `.fa`, `.fna`, `.fasta`  
+- Parallel processing using **GNU parallel**  
 
 ---
 
 ## 🛠️ Dependencies
-- BLAST+ (makeblastdb, blastn)
-- Python 3 with BioPython, pandas, matplotlib, seaborn
 
----
+Make sure all the following are installed before running the script:
 
-## 📥 Installation
-Before running the script, ensure that the required dependencies are installed:
+- **BLAST+** (`makeblastdb`, `blastn`)  
+- **GNU parallel**  
+- **Python 3** with:
+  - [BioPython](https://biopython.org/) → `pip install biopython`
+  - [pandas](https://pandas.pydata.org/) → `pip install pandas`
+  - [matplotlib](https://matplotlib.org/) → `pip install matplotlib`
+  - [seaborn](https://seaborn.pydata.org/) → `pip install seaborn`
+- **bedtools** (`sudo apt-get install bedtools`)  
+- **awk** (pre-installed on most Linux systems)  
 
+**Quick install example using conda & apt:**
 ```bash
-git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
-cd TandemRepeatEXplorer
-
 sudo apt-get install bedtools
-pip install biopython pandas matplotlib seaborn
+conda install -c bioconda blast
 conda install -c conda-forge parallel
+pip install biopython pandas matplotlib seaborn
 
 ```
 

@@ -204,7 +204,7 @@ cpo    Catopsilia pomona
 python3 monoMiner.py
 ```
 
-## 📂 Output Structure
+## 📂 Output Files
 .
 
 ├── final.fasta                    # Concatenated motifs

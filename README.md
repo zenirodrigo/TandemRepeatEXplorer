@@ -3,7 +3,7 @@
 [![Shell Script](https://img.shields.io/badge/Shell_Script-Compatible-brightgreen?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Python 3](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-<img align="right" src="social-preview.png" width="150" alt="Repository Icon">
+<img align="right" src="social-preview.png" width="350" alt="Repository Icon">
 <br clear="right">
 <h1>Tandem Repeat Explorer 🦖🧬</h1>
 

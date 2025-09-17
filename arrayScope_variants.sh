@@ -38,7 +38,7 @@ run_blast_for_ref() {
     awk 'NR % 2 == 0 { for (i=0;i<'"$multiplier"';i++) printf $0 } NR % 2 != 0' "$ref_fasta" > multiplied_reference_${ref_no_ext}.fasta
 
     local blast_output="blast_${ref_no_ext}.out"
-    blastn -task blastn -outfmt "6" -db "$temp_genome" -query "multiplied_reference_${ref_no_ext}.fasta" -out "$blast_output" -evalue 1e-10 -qcov_hsp_perc 70 -num_threads 1
+    blastn -task blastn -outfmt "6" -db "$temp_genome" -query "multiplied_reference_${ref_no_ext}.fasta" -out "$blast_output" -evalue 1e-10 -qcov_hsp_perc 70 -num_threads 30
 
     if [ ! -s "$blast_output" ]; then
         echo "BLAST found no matches for $ref_no_ext"
@@ -68,10 +68,10 @@ read -e -p "Enter genome file names (space-separated): " input_biblios
 read -p "How many chromosomes sequences will be used? " num_sequences
 read -e -p "Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): " refs_in
 read -p "How many monomers will be used to create a array (here is the minimum monomers to form a array in this study)? " multiplier
-read -p "Quantas threads deseja utilizar? (ex: 4, 8, etc.): " NUM_THREADS
+read -p "How many threads? (ex: 4, 8, etc.): " NUM_THREADS
 
 if ! command -v parallel &> /dev/null; then
-    echo "Erro: GNU parallel não está instalado. Use: conda install -c conda-forge parallel"
+    echo "Erro: GNU parallel not detected. Use: conda install -c conda-forge parallel"
     exit 1
 fi
 
@@ -111,7 +111,7 @@ for input_biblio in $input_biblios; do
 
     mv "$temp_bed" "$genome_name/valid_monomers.bed"
 
-    echo "Arquivo valid_monomers.bed criado para $genome_name."
+    echo " valid_monomers.bed created $genome_name."
 
 python3 - <<EOF
 import os

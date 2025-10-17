@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Enable filename autocompletion
 shopt -s progcomp
 
 _autocomplete() {
@@ -68,10 +67,10 @@ read -e -p "Enter genome file names (space-separated): " input_biblios
 read -p "How many chromosomes sequences will be used? " num_sequences
 read -e -p "Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): " refs_in
 read -p "How many monomers will be used to create a array (here is the minimum monomers to form a array in this study)? " multiplier
-read -p "How many threads? (ex: 4, 8, etc.): " NUM_THREADS
+read -p "How many threads will be used? (ex: 4, 8, etc.): " NUM_THREADS
 
 if ! command -v parallel &> /dev/null; then
-    echo "Erro: GNU parallel not detected. Use: conda install -c conda-forge parallel"
+    echo "Error: GNU parallel not found. Use: conda install -c conda-forge parallel"
     exit 1
 fi
 
@@ -111,7 +110,7 @@ for input_biblio in $input_biblios; do
 
     mv "$temp_bed" "$genome_name/valid_monomers.bed"
 
-    echo " valid_monomers.bed created $genome_name."
+    echo "Arquivo valid_monomers.bed created in $genome_name."
 
 python3 - <<EOF
 import os
@@ -264,4 +263,3 @@ plt.savefig("$genome_name/array_chromosome_vs_size_scatter.png", dpi=300, bbox_i
 print("Visualization plots saved.")
 EOF
 done
-

@@ -18,18 +18,19 @@ This repository, also called **T-REx**, contains four scripts for analyzing tand
 ---
 ## 📚 Table of Contents
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
-- [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis)
+- [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis-pipeline)
 - [monoMiner.py](#monominerpy--genome-repeat-analysis-pipeline)
 - [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
 
 ## Quick Start
+```bash
 git clone https://github.com/usuario/T-REx.git
 cd T-REx
 bash arrayScope.sh
 bash satFlank.sh
 python3 monoMiner.py
 bash gene_extractor.sh BRCA1 species.txt
-
+```
 
 ## arrayScope.sh – Genome Repeat Analysis Pipeline
 

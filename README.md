@@ -239,9 +239,9 @@ python3 monoMiner.py
 This project is licensed under the MIT License
 
 ## Acknowledgments
-- Heng Li, Ole Tange, NCBI team, and BEDTools team for developing essential bioinformatics tools.
+- Heng Li (simply for existing and inspiring generations of bioinformaticians), Ole Tange, the NCBI team, and the BEDTools team for creating  tools that keep bioinformatics alive and reproducible.
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
-- This code was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
+- These codes was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
 
 ## ⁉️ Contact
 For questions or improvements, contact:

@@ -24,7 +24,7 @@ This repository, also called **T-REx**, contains four scripts for analyzing tand
 
 ## Quick Start
 ```bash
-git clone https://github.com/usuario/T-REx.git
+git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
 cd T-REx
 bash arrayScope.sh
 bash satFlank.sh

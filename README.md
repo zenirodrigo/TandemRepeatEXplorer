@@ -23,7 +23,7 @@ This repository, also called **T-REx**, contains four scripts for analyzing tand
 **ArrayScope** is a **Bash + Python** pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.  
 It processes multiple genomes and reference monomers, runs **[BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)**, merges nearby repeat regions (< 2000 bp apart), and generates high-quality plots for chromosome-scale visualization.
 
-> 💡 For variants in reference files — e.g., two slightly different monomers or the same repeat from different species — use the `arrayScope_variants.sh` script and include an underscore `_` in the filename.
+> 💡 For variants in reference files — e.g., two slightly different monomers or the same repeat from different species, include an underscore `_` in the filename.
 
 ### ✅ Features
 - Processes **multiple genome assemblies** and reference monomer files

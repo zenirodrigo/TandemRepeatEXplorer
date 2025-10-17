@@ -16,6 +16,20 @@ This repository, also called **T-REx**, contains four scripts for analyzing tand
 - **gene_extractor.sh** – Automates the retrieval and extraction of the genomic sequence of a specific gene across multiple species using NCBI tools.
 
 ---
+## 📚 Table of Contents
+- [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
+- [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis)
+- [monoMiner.py](#monominerpy--genome-repeat-analysis-pipeline)
+- [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
+
+## Quick Start
+git clone https://github.com/usuario/T-REx.git
+cd T-REx
+bash arrayScope.sh
+bash satFlank.sh
+python3 monoMiner.py
+bash gene_extractor.sh BRCA1 species.txt
+
 
 ## arrayScope.sh – Genome Repeat Analysis Pipeline
 

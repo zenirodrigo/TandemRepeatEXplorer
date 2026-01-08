@@ -8,7 +8,7 @@
 <h1>Tandem Repeat Explorer 🦖🧬</h1>
 
 
-This repository, also called **T-REx**, contains four scripts for analyzing tandem sequences from genomes (first two scripts) and short reads (**monoMiner**):
+Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identification, characterization, and visualization of tandem arrays from genome assemblies and short-read sequencing data.
 
 - **arrayScope.sh** – Characterizing and locating tandem repeat arrays in assembled genomes.
 - **satFlank.sh** – Studying the neighborhood of arrays using the assembled genome and its annotation.

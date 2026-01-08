@@ -169,10 +169,10 @@ You will be prompted to enter:
 
 ---
 
-## monoMiner.py – Genome Repeat Analysis Pipeline
+## monoMiner.py – Reference-guided Motif Mining from Short Reads
 
 ### 📜 Description
-Automated Python pipeline for motif mining from sequencing libraries.
+monoMiner performs reference-guided motif discovery from sequencing libraries, enabling rapid detection and clustering of tandem repeat motifs across multiple datasets with parallel processing and automated filtering.
 
 ### 🛠️ Dependencies
 - **Python 3**
@@ -239,9 +239,10 @@ python3 monoMiner.py
 This project is licensed under the MIT License
 
 ## Acknowledgments
-- Heng Li (simply for existing and inspiring generations of bioinformaticians), Ole Tange, the NCBI team, and the BEDTools team for creating  tools that keep bioinformatics alive and reproducible.
+- Heng Li (for existing and inspiring generations of bioinformaticians), Ole Tange, the NCBI  and the BEDTools teams for creating  tools that keep bioinformatics alive and reproducible.
 - Support from Universidade Estadual Paulista Júlio de Mesquita Filho (UNESP).
-- These codes was developed in my PhD with fellowship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP)
+- These codes were developed during my PhD with fellowship support from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP).
+
 
 ## ⁉️ Contact
 For questions or improvements, contact:

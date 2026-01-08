@@ -249,3 +249,8 @@ For questions or improvements, contact:
 **rodrigo.zeni@unesp.br**
 or
 **rodrigo-zeni@outlook.com.br**
+
+
+## 📖 Citation
+If you use T-REx in your research, please cite the associated publication (in preparation).
+

@@ -101,15 +101,15 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
 
 - **Outer ring:** chromosomes/contigs (preserves the original FASTA order)
 - **Ruler:** tick marks every **10 Mb** and labels every **50 Mb**
-- **Main ring:** stacked satDNA coverage per **100 kb** bin (Top 10 colored + Other)
-- **Inner track:** **GC fraction** per **100 kb** bin
+- **Main ring:** stacked satDNA coverage per **100 kb** window (Top 10 colored + Other)
+- **Inner track:** **GC fraction** per **100 kb** window
 - **Top 10 selection mode (interactive):**
   1) **First 10 sequences in the reference FASTA (FASTA order)**  
   2) **Top 10 most abundant (by total bp covered in genome hits)**
 
 > ✅ IMPORTANT: contig/chromosome IDs are **not re-ordered and not re-indexed**.  
 > The plot only applies a **safe abbreviation** for labels: `ChromosomeN` → `Chr N`.  
-> All other IDs remain unchanged (e.g., `B1`, `B2`, `scaffold_3`).
+> All other IDs remain unchanged (e.g., `B1`, `Sex_chromosome`, `scaffold_1`, `unplaced` and any other name.).
 
 ### ✅ Features
 - Works with **multiple genome FASTA** files
@@ -146,10 +146,6 @@ Inside a folder named after the genome FASTA (basename):
 ```bash
 bash satDNA_density.sh
 ```
-
-### 🧠 Notes & Best Practices
-- If you pass a **multi-FASTA satelitome** as a single file, it is recommended to use one BLAST job per satDNA (best scalability on multi-core servers).
-- For servers with many cores, use **many parallel jobs** and low BLAST threads per job to avoid oversubscription.
 
 ---
 

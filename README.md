@@ -18,6 +18,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 ---
 ## 📚 Table of Contents
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
+- [satDNA_density.sh](#satdna_densitysh--circos-like-satelitome-density-plot)
 - [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis-pipeline)
 - [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
 - [monoMiner.py](#monominerpy--genome-repeat-analysis-pipeline)
@@ -84,6 +85,73 @@ pip install biopython pandas matplotlib seaborn
 ```bash
 bash arrayScope.sh
 ```
+
+
+---
+
+---
+
+
+## satDNA_density.sh – Circos-like satelitome density plot
+
+### 📜 Description
+**satDNA_density.sh** is a **Bash + Python** module for generating a **circos-like** overview of satDNA distributions across chromosomes/contigs from a genome assembly.
+
+It runs **BLASTn** searches of satDNA references against a genome FASTA, merges nearby hits (≤ 2000 bp), and produces a circular plot with:
+
+- **Outer ring:** chromosomes/contigs (preserves the original FASTA order)
+- **Ruler:** tick marks every **10 Mb** and labels every **50 Mb**
+- **Main ring:** stacked satDNA coverage per **100 kb** bin (Top 10 colored + Other)
+- **Inner track:** **GC fraction** per **100 kb** bin
+- **Top 10 selection mode (interactive):**
+  1) **First 10 sequences in the reference FASTA (FASTA order)**  
+  2) **Top 10 most abundant (by total bp covered in genome hits)**
+
+> ✅ IMPORTANT: contig/chromosome IDs are **not re-ordered and not re-indexed**.  
+> The plot only applies a **safe abbreviation** for labels: `ChromosomeN` → `Chr N`.  
+> All other IDs remain unchanged (e.g., `B1`, `B2`, `scaffold_3`).
+
+### ✅ Features
+- Works with **multiple genome FASTA** files
+- Uses only the **first N contigs/chromosomes** from each genome (preserving FASTA order)
+- BLAST hits are merged within **2000 bp** only when on the **same chromosome AND same satDNA**
+- Parallel BLAST execution using **GNU parallel**
+- Produces both figures and tabular outputs (TSV) for downstream analysis
+
+### 🛠️ Dependencies
+- **BLAST+** (`makeblastdb`, `blastn`)
+- **GNU parallel**
+- **Python 3.8+** with:
+  - `numpy`
+  - `pandas`
+  - `matplotlib`
+
+### 📂 Inputs (interactive prompts)
+1. Genome FASTA file(s) (space-separated)
+2. Number of chromosome sequences (contigs) to use from each genome FASTA
+3. Reference FASTA file(s) (satDNA monomers OR a satelitome multi-FASTA)
+4. Repeat multiplier (number of monomers to build arrays for BLAST sensitivity)
+5. Number of parallel jobs
+6. Top-10 selection mode (FASTA order or abundance)
+
+### 📂 Outputs (per genome)
+Inside a folder named after the genome FASTA (basename):
+- `valid_monomers.bed`
+- `satelitome_density_100kb_by_ref_long.tsv`
+- `satelitome_density_100kb_total.tsv`
+- `gc_track_100kb_full.tsv`
+- `satelitome_density_circos_like.png`
+
+### 🚀 Usage
+```bash
+bash satDNA_density.sh
+```
+
+### 🧠 Notes & Best Practices
+- If you pass a **multi-FASTA satelitome** as a single file, it is recommended to use one BLAST job per satDNA (best scalability on multi-core servers).
+- For servers with many cores, use **many parallel jobs** and low BLAST threads per job to avoid oversubscription.
+
+---
 
 ---
 

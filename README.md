@@ -20,7 +20,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 ---
 ## 📚 Table of Contents
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
-- [satDNA_density.sh](#satdna_densitysh--circos-like-satelitome-density-plot)
+- [satDNA_density.sh](#satdna_densitysh--circos-like-satellitome-density-plot)
 - [satDNA_similarity.py](#satdna_similaritypy--biological-clustering-of-satdna-monomers)
 - [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis-pipeline)
 - [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
@@ -95,7 +95,7 @@ bash arrayScope.sh
 ---
 
 
-## satDNA_density.sh – Circos-like satelitome density plot
+## satDNA_density.sh – Circos-like satellitome density plot
 
 ### 📜 Description
 **satDNA_density.sh** is a **Bash + Python** module for generating a **circos-like** overview of satDNA distributions across chromosomes/contigs from a genome assembly.
@@ -132,7 +132,7 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
 ### 📂 Inputs
 1. Genome FASTA file(s) (space-separated)
 2. Number of chromosome sequences (contigs) to use from each genome FASTA
-3. Reference FASTA file(s) (satDNA monomers OR a satelitome multi-FASTA)
+3. Reference FASTA file(s) (satDNA monomers OR a satellitome multi-FASTA)
 4. Repeat multiplier (number of monomers to build arrays for BLAST sensitivity)
 5. Number of parallel jobs
 6. Top-10 selection mode (FASTA order or abundance)
@@ -140,10 +140,10 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
 ### 📂 Outputs (per genome)
 Inside a folder named after the genome FASTA (basename):
 - `valid_monomers.bed`
-- `satelitome_density_100kb_by_ref_long.tsv`
-- `satelitome_density_100kb_total.tsv`
+- `satellitome_density_100kb_by_ref_long.tsv`
+- `satellitome_density_100kb_total.tsv`
 - `gc_track_100kb_full.tsv`
-- `satelitome_density_circos_like.png`
+- `satellitome_density_circos_like.png`
 
 ###  Usage
 ```bash
@@ -189,18 +189,18 @@ bash satDNA_density.sh
 ---
 
 ### 📂 Output Files
-For an input file named `satelitome.fasta`, the script generates:
+For an input file named `satellitome.fasta`, the script generates:
 
-- `satelitome.id80.family_reps.fasta`  
+- `satellitome.id80.family_reps.fasta`  
   FASTA file containing **one representative sequence per satDNA family**
 
-- `satelitome.id80.families.tsv`  
+- `satellitome.id80.families.tsv`  
   Tabular file describing family membership
 
-- `satelitome.id80.proof.txt`  
+- `satellitome.id80.proof.txt`  
   Alignment proofs documenting **why sequences were grouped as variants**
 
-- `satelitome.id80.superfamilies.tsv`  
+- `satellitome.id80.superfamilies.tsv`  
   Pairwise superfamily relationships (homology without collapsing sequences)
 
 ---

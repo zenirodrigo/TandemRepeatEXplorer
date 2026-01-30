@@ -171,6 +171,7 @@ Sequences are considered **the same satDNA family** when all conditions below ar
 - The **minimum identity threshold** (default: 80%) is reached 
 
 Only in this case are sequences considered true **variants** and collapsed into a **single family representative**.
+
 ---
 
 ### satDNA superfamilies (homology without redundancy)

@@ -88,6 +88,7 @@ def revcomp(seq: str) -> str:
     return seq.translate(DNA_COMP)[::-1]
 
 
+# --- canonical k-mers to make prefilter RC-aware ---
 def revcomp_kmer(km: str) -> str:
     return km.translate(DNA_COMP)[::-1]
 
@@ -95,6 +96,7 @@ def revcomp_kmer(km: str) -> str:
 def canonical_kmer(km: str) -> str:
     rc = revcomp_kmer(km)
     return km if km <= rc else rc
+# ------------------------------------------------------
 
 
 class UnionFind:
@@ -445,6 +447,8 @@ def run(fasta: str, identity_threshold: float) -> None:
                     direction = "B_in_A"
 
                 superfamily_hits.append({
+                    "query_i": query,
+                    "target_i": target,
                     "query_id": ids[query],
                     "target_id": ids[target],
                     "query_len": lens[query],
@@ -457,6 +461,7 @@ def run(fasta: str, identity_threshold: float) -> None:
                 })
                 superfams_for_i += 1
 
+    # Build families (final)
     families = defaultdict(list)
     for i in range(n):
         families[uf.find(i)].append(i)
@@ -465,53 +470,120 @@ def run(fasta: str, identity_threshold: float) -> None:
     out_fasta = base + f".id{int(identity_threshold*100)}.family_reps.fasta"
     out_tsv = base + f".id{int(identity_threshold*100)}.families.tsv"
     out_report = base + f".id{int(identity_threshold*100)}.proof.txt"
+
     out_super = base + f".id{int(identity_threshold*100)}.superfamilies.tsv"
-    out_simple = base + f".id{int(identity_threshold*100)}.families.simple.txt"
+    out_super_groups = base + f".id{int(identity_threshold*100)}.superfamilies.groups.txt"
 
     reps = []
+    member_to_rep: Dict[str, str] = {}
+    rep_to_size: Dict[str, int] = {}
+
     with open(out_tsv, "w", encoding="utf-8") as tsv:
         tsv.write("family_id\tfamily_size\trep_id\tmember_id\tmember_len\n")
         for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
             rep = min(members, key=lambda x: ids[x])
             fam_id = ids[rep]
             reps.append((fam_id, seqs[rep]))
+            rep_to_size[fam_id] = len(members)
             for m in sorted(members, key=lambda x: ids[x]):
+                member_to_rep[ids[m]] = fam_id
                 tsv.write(f"{fam_id}\t{len(members)}\t{ids[rep]}\t{ids[m]}\t{lens[m]}\n")
 
     write_fasta(out_fasta, reps)
 
-    # Superfamilies TSV
     with open(out_super, "w", encoding="utf-8") as out:
         out.write(
-            "query_id\ttarget_id\tquery_len\ttarget_len\tdirection\tbest_orientation\t"
-            "identity_oneway\tidentity_reciprocal_min\tshared_signals\n"
+            "query_id\ttarget_id\tquery_len\ttarget_len\t"
+            "query_family\ttarget_family\tquery_family_size\ttarget_family_size\t"
+            "direction\tbest_orientation\tidentity_oneway\tidentity_reciprocal_min\tshared_signals\n"
         )
+
         superfamily_hits.sort(key=lambda d: (d["identity_oneway"], d["shared_signals"]), reverse=True)
         for d in superfamily_hits:
+            qfam = member_to_rep.get(d["query_id"], d["query_id"])
+            tfam = member_to_rep.get(d["target_id"], d["target_id"])
             out.write(
                 f"{d['query_id']}\t{d['target_id']}\t{d['query_len']}\t{d['target_len']}\t"
+                f"{qfam}\t{tfam}\t{rep_to_size.get(qfam, 1)}\t{rep_to_size.get(tfam, 1)}\t"
                 f"{d['direction']}\t{d['best_orientation']}\t{d['identity_oneway']:.4f}\t"
                 f"{d['identity_reciprocal_min']:.4f}\t{d['shared_signals']}\n"
             )
 
-    with open(out_simple, "w", encoding="utf-8") as out:
-        fam_num = 0
-        for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
-            fam_num += 1
-            rep = min(members, key=lambda x: ids[x])
-            rep_id = ids[rep]
-            out.write(f"Family-{fam_num} (rep={rep_id}, size={len(members)}):\n")
+    fam_edges = defaultdict(list) 
+    fam_adj = defaultdict(set)
 
-            if len(members) == 1:
-                out.write(f"{rep_id} - {rep_id} - 100.0%\n\n")
-                continue
+    for d in superfamily_hits:
+        qfam = member_to_rep.get(d["query_id"], d["query_id"])
+        tfam = member_to_rep.get(d["target_id"], d["target_id"])
+        if qfam == tfam:
+            continue
 
-            for m in sorted(members, key=lambda x: ids[x]):
-                if m == rep:
-                    continue
-                id_best, rel = best_direction_identity(seqs[rep], seqs[m])
-                out.write(f"{rep_id} - {ids[m]} - {id_best * 100:.1f}% (best: {rel})\n")
-            out.write("\n")
+        a, b = (qfam, tfam) if qfam <= tfam else (tfam, qfam)
+        fam_edges[(a, b)].append(d)
+        fam_adj[a].add(b)
+        fam_adj[b].add(a)
+
+    visited = set()
+    components = []
+
+    for node in sorted(fam_adj.keys()):
+        if node in visited:
+            continue
+        stack = [node]
+        visited.add(node)
+        comp = []
+        while stack:
+            x = stack.pop()
+            comp.append(x)
+            for y in fam_adj.get(x, set()):
+                if y not in visited:
+                    visited.add(y)
+                    stack.append(y)
+        components.append(sorted(comp))
+
+    with open(out_super_groups, "w", encoding="utf-8") as out:
+        out.write("# Superfamily groups (family-level connected components)\n")
+        out.write("# A group means: at least one member of family A has one-way >= threshold similarity to a member of family B,\n")
+        out.write("# but they did NOT merge as variants (reciprocal min < threshold).\n\n")
+        out.write(f"# Identity threshold: {identity_threshold}\n")
+        out.write(f"# Number of superfamily links (pair-level): {len(superfamily_hits)}\n")
+        out.write(f"# Number of family-level groups: {len(components)}\n\n")
+
+        if not components:
+            out.write("No superfamily groups detected.\n")
+        else:
+            group_id = 0
+            for comp in sorted(components, key=len, reverse=True):
+                group_id += 1
+                out.write("=" * 100 + "\n")
+                out.write(f"SuperfamilyGroup-{group_id} (families={len(comp)}):\n")
+                for fam in comp:
+                    out.write(f"  Family rep: {fam} (size={rep_to_size.get(fam, 1)})\n")
+                out.write("\nEvidence (top family links by best identity):\n")
+
+                evid_list = []
+                comp_set = set(comp)
+                for (a, b), evs in fam_edges.items():
+                    if a in comp_set and b in comp_set:
+                        best = max(evs, key=lambda e: (e["identity_oneway"], e["shared_signals"]))
+                        evid_list.append((a, b, best))
+
+                evid_list.sort(key=lambda x: (x[2]["identity_oneway"], x[2]["shared_signals"]), reverse=True)
+
+                max_pairs_to_print = 200
+                printed = 0
+                for a, b, best in evid_list:
+                    out.write(
+                        f"  {a}  <->  {b} | best one-way={best['identity_oneway']*100:.1f}% "
+                        f"(dir={best['direction']}, orient={best['best_orientation']}) | "
+                        f"e.g. {best['query_id']} -> {best['target_id']} | "
+                        f"len {best['query_len']} -> {best['target_len']}\n"
+                    )
+                    printed += 1
+                    if printed >= max_pairs_to_print:
+                        out.write(f"  (stopped after {max_pairs_to_print} family links)\n")
+                        break
+                out.write("\n")
 
     edges_by_root = defaultdict(list)
     for i, j, proof in proof_edges:
@@ -528,7 +600,7 @@ def run(fasta: str, identity_threshold: float) -> None:
     report.append("")
     report.append(f"# Stats: sequences={n}, families={len(families)}, candidate_pairs={compared_candidates}, alignments={alignments_done}, unions={unions}")
     report.append(f"# Superfamily links written to: {out_super}")
-    report.append(f"# Simple family summary written to: {out_simple}")
+    report.append(f"# Superfamily groups written to: {out_super_groups}")
     report.append("")
 
     for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
@@ -585,7 +657,7 @@ def run(fasta: str, identity_threshold: float) -> None:
     print(f"TSV:         {out_tsv}")
     print(f"REPORT:      {out_report}")
     print(f"SUPERFAMS:   {out_super}")
-    print(f"FAM_SIMPLE:  {out_simple}")
+    print(f"SF_GROUPS:   {out_super_groups}")
 
 
 if __name__ == "__main__":

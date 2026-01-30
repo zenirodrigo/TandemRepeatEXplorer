@@ -260,6 +260,6 @@ plt.grid(True)
 plt.tight_layout()
 plt.savefig("$genome_name/array_chromosome_vs_size_scatter.png", dpi=300, bbox_inches='tight')
 
-print("Visualization plots saved.")
+print("Done!!!")
 EOF
 done

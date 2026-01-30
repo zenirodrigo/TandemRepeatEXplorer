@@ -29,14 +29,14 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
         continue
     fi
 
-    echo "🧠 Gene ID found: $GENE_ID"
+    echo " Gene ID found: $GENE_ID"
 
     # New approach to extract coordinates using esummary and xtract
     COORDS=$(esummary -db gene -id "$GENE_ID" | \
              xtract -pattern DocumentSummary -element GenomicInfoType/ChrAccVer GenomicInfoType/ChrStart GenomicInfoType/ChrStop GenomicInfoType/ExonCount)
 
     if [ -z "$COORDS" ]; then
-        echo "⚠️  Coordinates not found. Using RNA fallback..."
+        echo "Coordinates not found. Using RNA fallback..."
         # Fallback for RNA
         ZIP_FILE="${GENE_SYMBOL}_${SPECIES_NAME// /_}.zip"
         TMP_DIR="tmp_${GENE_SYMBOL}_${SPECIES_NAME// /_}"
@@ -82,7 +82,7 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
         continue
     fi
 
-    echo "🗺️ Coordinates found: $CONTIG:$START-$END (Exons: $EXON_COUNT)"
+    echo "Coordinates found: $CONTIG:$START-$END (Exons: $EXON_COUNT)"
 
     # Direct download from NCBI using efetch
     OUTPUT_FILE="${GENE_SYMBOL}_${SPECIES_NAME// /_}.fasta"
@@ -109,7 +109,7 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
         mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
     fi
 
-    echo "✅ Genomic sequence saved as $OUTPUT_FILE"
+    echo "Genomic sequence saved as $OUTPUT_FILE"
     echo "Sequence length: $(seqkit stats -T "$OUTPUT_FILE" | tail -n1 | cut -f5)"
     echo "-------------------------------------------"
 
@@ -117,4 +117,4 @@ done
 
 exec 3<&-
 
-echo "🏁 Process completed for all species."
+echo "Process completed for all species."

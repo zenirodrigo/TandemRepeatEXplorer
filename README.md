@@ -153,37 +153,32 @@ bash satDNA_density.sh
 
 ---
 
-## satDNA_similarity.py – Biological clustering of satDNA monomers
+## satDNA_similarity.py – Automated alignment of satellite DNA monomers for variant and superfamily analysis
 
-### Description
-**satDNA_similarity.py** Alignment-based classification of satellite DNA variants and superfamilies
+### 📜 Description
+**satDNA_similarity.py** performs automated, biologically informed alignments of **satellite DNA (satDNA) monomers** to classify them at two hierarchical levels:
 
-
----
-
-### satDNA families (variants of the same satellite)
-Sequences are considered **the same satDNA family** when all conditions below are met:
-
-- Similarity is evaluated assuming **circular sequences** (no fixed start position)
-- **Reverse-complement orientations** are allowed
-- **Insertions and deletions (gaps)** are included in the alignment
-- Similarity is **reciprocal** (A aligns to B and B aligns to A)
-- The **minimum identity threshold** (default: 80%) is reached 
-
-Only in this case are sequences considered true **variants** and collapsed into a **single family representative**.
+- **satDNA families** (true sequence variants of the same satellite)
+- **satDNA superfamilies** (homologous but distinct satellites)
 
 ---
 
-### satDNA superfamilies (homology without redundancy)
-Some satDNA monomers share **partial or asymmetric similarity**, for example:
+### Features
+- Alignment-based comparison of satDNA monomers
+- Explicit handling of **circular sequences** (no fixed start position)
+- **Reverse-complement equivalence**
+- **Insertions and deletions (gaps)** included in similarity estimates
+- Automatic distinction between **families (variants)** and **superfamilies (homology only)**
+- Supports **very long monomers** (including >5 kb)
+- Generates alignment **proof files** for full biological traceability
+- Produces strict FASTA outputs compatible with downstream tools
 
-- A short monomer aligns almost perfectly inside a longer monomer
-- Homology is strong, but sequences are **not variants**
+---
 
-These cases are classified as **superfamilies**.
-
-**Important:**  
-Superfamilies are **not removed**. All sequences are preserved, and their homology is reported separately.
+###  Dependencies
+- **Python 3.8+**
+- Standard Python libraries only  
+(no external bioinformatics dependencies required)
 
 ---
 
@@ -191,24 +186,29 @@ Superfamilies are **not removed**. All sequences are preserved, and their homolo
 - A FASTA file containing **satDNA monomers**  
   (strict FASTA format: `>ID` followed by sequence)
 
+---
 
-### 📂 Output files
-For an input file named `satelitome.fasta`, the script produces:
+### 📂 Output Files
+For an input file named `satelitome.fasta`, the script generates:
 
 - `satelitome.id80.family_reps.fasta`  
-  One representative sequence per **satDNA family**
+  FASTA file containing **one representative sequence per satDNA family**
 
 - `satelitome.id80.families.tsv`  
   Tabular file describing family membership
 
 - `satelitome.id80.proof.txt`  
-  Alignment proofs showing **why sequences were grouped as variants**
+  Alignment proofs documenting **why sequences were grouped as variants**
 
 - `satelitome.id80.superfamilies.tsv`  
-  Pairwise superfamily relationships (homology without collapsing)
+  Pairwise superfamily relationships (homology without collapsing sequences)
 
+---
 
 ### Usage
+The script is fully interactive and requires only two inputs:
+- A FASTA file containing satDNA monomers
+- A minimum identity threshold (default: 0.80)
 ```bash
 python3 satDNA_similarity.py
 ```

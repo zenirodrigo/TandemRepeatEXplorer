@@ -7,9 +7,6 @@ import time
 from collections import defaultdict
 from typing import List, Tuple, Dict
 
-# ============================
-# TAB autocomplete for paths
-# ============================
 try:
     import readline
     import glob
@@ -37,19 +34,12 @@ VALID = set("ACGTN")
 
 FASTA_WRAP = 60
 
-# Alignment scoring (kept internal, no user prompts)
 MATCH_SCORE = 2
 MISMATCH_SCORE = -1
 GAP_SCORE = -2
-
-# Progress settings
 PROGRESS_EVERY_SEQS = 25
 PROGRESS_EVERY_ALNS = 200
 
-
-# ============================
-# FASTA IO (strict enough)
-# ============================
 def clean_id(h: str) -> str:
     return h.strip().split()[0]
 
@@ -94,9 +84,6 @@ def revcomp(seq: str) -> str:
     return seq.translate(DNA_COMP)[::-1]
 
 
-# ============================
-# Union-Find
-# ============================
 class UnionFind:
     def __init__(self, n: int):
         self.parent = list(range(n))
@@ -114,10 +101,6 @@ class UnionFind:
         self.parent[rb] = ra
         return True
 
-
-# ============================
-# Adaptive prefilter parameters
-# ============================
 def choose_k_and_min_shared(seq_len: int) -> Tuple[int, int]:
     """
     For long monomers, use larger k to avoid too many false candidate pairs.
@@ -139,19 +122,15 @@ def circular_kmers_set(seq: str, k: int) -> set:
     s2 = seq + seq
     return {s2[i:i + k] for i in range(0, n)}
 
-
-# ============================
 # Semi-global alignment identity
-# Identity = matches / alignment_length (gaps included)
 # A must be fully aligned; B2 has free ends.
-# ============================
+
 def semiglobal_align_identity(A: str, B2: str) -> float:
     n = len(A)
     m = len(B2)
 
-    # DP score + traceback direction (only to compute identity we still need path)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
-    tb = [[0] * (m + 1) for _ in range(n + 1)]  # 1 diag, 2 up, 3 left
+    tb = [[0] * (m + 1) for _ in range(n + 1)]
 
     for i in range(1, n + 1):
         dp[i][0] = dp[i - 1][0] + GAP_SCORE
@@ -218,9 +197,6 @@ def best_circular_identity(A: str, B: str) -> float:
     return id_fwd if id_fwd >= id_rc else id_rc
 
 
-# ============================
-# INTERACTIVE (ONLY 2 QUESTIONS)
-# ============================
 def ask_user() -> Tuple[str, float]:
     print("\n=== satDNA Similarity Clustering ===")
     print("Groups monomers into satDNA families using circular similarity,")
@@ -236,10 +212,6 @@ def ask_user() -> Tuple[str, float]:
 
     return fasta, identity
 
-
-# ============================
-# MAIN PIPELINE
-# ============================
 def run(fasta: str, identity_threshold: float) -> None:
     t0 = time.time()
     records = read_fasta(fasta)
@@ -259,16 +231,15 @@ def run(fasta: str, identity_threshold: float) -> None:
     print(f"Length stats (bp): min={min_len} median={med_len} max={max_len}")
     print("Building k-mer index (performance depends on monomer length)...")
 
-    # Choose prefilter parameters based on median length (robust)
     K, MIN_SHARED = choose_k_and_min_shared(med_len)
-    MAX_CANDIDATES_PER_SEQ = 3000  # internal safety cap
+    MAX_CANDIDATES_PER_SEQ = 3000
 
     print(f"Internal prefilter settings: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
     print("Clustering... (this may take time for very long monomers)")
 
     uf = UnionFind(n)
 
-    # Build inverted index: kmer -> list of indices
+    #  inverted index: kmer -> list of indices
     inv: Dict[str, List[int]] = defaultdict(list)
     kmers_by_i: List[set] = [set() for _ in range(n)]
 
@@ -305,7 +276,6 @@ def run(fasta: str, identity_threshold: float) -> None:
             if uf.find(i) == uf.find(j):
                 continue
 
-            # expensive step
             alignments_done += 1
             if alignments_done % PROGRESS_EVERY_ALNS == 0:
                 dt = time.time() - t0

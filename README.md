@@ -21,7 +21,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 ## 📚 Table of Contents
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
 - [satDNA_density.sh](#satdna_densitysh--circos-like-satellitome-density-plot)
-- [satDNA_similarity.py](#satdna_similaritypy--biological-clustering-of-satdna-monomers)
+- [satDNA_similarity.py](#satdna_similaritypy--automated-alignment-of-satellite-dna-monomers-for-variant-and-superfamily-analysis)
 - [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis-pipeline)
 - [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
 - [monoMiner.py](#monominerpy--reference-guided-motif-mining-from-short-reads)

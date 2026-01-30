@@ -171,7 +171,7 @@ Sequences are considered **the same satDNA family** when all conditions below ar
 - The **minimum identity threshold** (default: 80%) is reached 
 
 Only in this case are sequences considered true **variants** and collapsed into a **single family representative**.
-
+---
 
 ### satDNA superfamilies (homology without redundancy)
 Some satDNA monomers share **partial or asymmetric similarity**, for example:
@@ -184,7 +184,7 @@ These cases are classified as **superfamilies**.
 **Important:**  
 Superfamilies are **not removed**. All sequences are preserved, and their homology is reported separately.
 
-
+---
 
 ### 📂 Input
 - A FASTA file containing **satDNA monomers**  

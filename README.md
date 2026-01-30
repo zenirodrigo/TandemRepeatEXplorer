@@ -12,6 +12,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 
 - **arrayScope.sh** – Characterizing and locating tandem repeat arrays in assembled genomes.
 - **satDNA_density.sh** - Generating a circus overview of satDNAs distributions across a  genome assembly.
+- - **satDNA_similarity.py** – Biological clustering of satellite DNA monomers into families, accounting for circularity, reverse-complement, and indels.
 - **satFlank.sh** – Studying the neighborhood of arrays using the assembled genome and its annotation.
 - **monoMiner.py** – Automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
 - **gene_extractor.sh** – Automates the retrieval and extraction of the genomic sequence of a specific gene across multiple species using NCBI tools.
@@ -20,6 +21,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 ## 📚 Table of Contents
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
 - [satDNA_density.sh](#satdna_densitysh--circos-like-satelitome-density-plot)
+- [satDNA_similarity.py](#satdna_similaritypy--biological-clustering-of-satdna-monomers)
 - [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis-pipeline)
 - [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
 - [monoMiner.py](#monominerpy--genome-repeat-analysis-pipeline)
@@ -149,6 +151,78 @@ bash satDNA_density.sh
 ```
 
 ---
+
+---
+
+---
+
+## satDNA_similarity.py – Biological clustering of satDNA monomers
+
+### 📜 Description
+**satDNA_similarity.py** is a Python module designed to group **satellite DNA monomers** into biologically meaningful families.
+
+Unlike standard redundancy filters, this tool explicitly accounts for the biological properties of satDNAs:
+
+- **Circularity** (monomers have no fixed start position)
+- **Reverse-complement equivalence**
+- **Insertions and deletions (indels)** included in similarity estimates
+- **Transitive similarity** (if A ~ B and B ~ C, then A ~ C)
+
+Sequences sharing at least a user-defined **minimum identity threshold** (default: 80%) are considered variants of the same satDNA family.
+
+This module is particularly useful for:
+- Removing redundancy in satelitomes
+- Grouping variant monomers prior to downstream analyses
+- Standardizing satDNA family definitions across species
+
+---
+
+### ✅ Key Features
+- Handles **circular sequence similarity**
+- Considers **reverse-complement sequences as redundant**
+- Includes **gaps/indels** in identity calculation
+- Supports **very long monomers** (including >5 kb)
+- Uses adaptive **k-mer prefiltering** for computational efficiency
+- Ensures **biological transitivity** of satDNA families
+- Produces clean, strict FASTA outputs compatible with downstream tools
+
+---
+
+### 🛠️ Dependencies
+- **Python 3.8+**
+- Standard Python libraries only  
+(no external bioinformatics dependencies required)
+
+---
+
+### 📂 Input
+- A FASTA file containing **satDNA monomers**  
+  (each entry must follow strict FASTA format: `>ID` followed by the sequence)
+
+---
+
+### 📂 Output Files
+Given an input file `satelitoma.fasta`, the script generates:
+
+- `satelitoma.id80.family_reps.fasta`  
+  FASTA file with **one representative sequence per satDNA family**
+
+- `satelitoma.id80.families.tsv`  
+  Tabular file listing family membership for each monomer, including:
+  - family ID
+  - family size
+  - representative ID
+  - member ID
+  - sequence length
+
+---
+
+### 🚀 Usage
+The script is designed to be **fully interactive and user-friendly**, requiring only two inputs.
+
+```bash
+python3 satDNA_similarity.py
+```
 
 ---
 

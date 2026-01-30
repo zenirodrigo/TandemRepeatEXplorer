@@ -68,7 +68,6 @@ PY
 }
 
 run_blast_for_ref_to_bed() {
-    # Writes one BED file per reference to avoid parallel race conditions
     local ref_fasta="$1"
     local temp_genome_db="$2"
     local multiplier="$3"
@@ -138,17 +137,12 @@ run_blast_for_ref_to_bed() {
 
 export -f run_blast_for_ref_to_bed remove_extensions multiply_fasta_python safe_id_from_path
 
-# -------------------------
-# Requirements
-# -------------------------
+
 need_cmd python3
 need_cmd parallel
 need_cmd blastn
 need_cmd makeblastdb
 
-# -------------------------
-# USER INPUTS (English)
-# -------------------------
 read -e -p "Enter genome FASTA file(s) (space-separated): " input_genomes
 read -p "How many chromosome sequences (contigs) should be used from each genome FASTA? " num_sequences
 read -e -p "Enter reference FASTA file(s) (satDNA monomers OR a satelitome multi-FASTA) (space-separated): " refs_in
@@ -165,7 +159,6 @@ if [[ "$TOP_MODE" != "1" && "$TOP_MODE" != "2" ]]; then
     die "Invalid option for Top Mode. Please type 1 or 2."
 fi
 
-# Expand wildcards for refs
 expanded_refs=()
 for r in $refs_in; do
     matches=( $(compgen -G "$r" || true) )
@@ -188,9 +181,7 @@ echo
 # Avoid oversubscription: keep BLAST threads low when running multiple jobs
 BLAST_THREADS=1
 
-# -------------------------
 # Main loop per genome
-# -------------------------
 for genome_fa in $input_genomes; do
     [ -f "$genome_fa" ] || die "Genome FASTA not found: $genome_fa"
 
@@ -261,9 +252,7 @@ REF_FASTAS = sys.argv[6:]
 BIN_SIZE   = 100_000
 TOP_N      = 10
 
-# ---------------------------
-# RULER SETTINGS
-# ---------------------------
+
 TICK_EVERY_BP  = 10_000_000   # 10 Mb
 LABEL_EVERY_BP = 50_000_000   # 50 Mb
 TICK_LEN_SMALL = 0.020
@@ -279,11 +268,6 @@ def read_bed_or_empty(path):
     return df
 
 def get_fasta_lengths_and_order(path):
-    """
-    IMPORTANT:
-    - Preserves the ORIGINAL FASTA order (no sorting)
-    - Returns: (chrom_order_list, lengths_dict)
-    """
     lengths = {}
     order = []
     cur = None
@@ -437,10 +421,6 @@ def compute_density_by_ref(bed_df, chrom_order, chrom_lengths, top_refs, bin_siz
     return dens_long, total_by_bin
 
 def abbreviate_chrom_label(chrom_id):
-    """
-    ONLY abbreviate ChromosomeN -> Chr N (no reindexing, no reordering).
-    Everything else stays the same (B1, B2, scaffold_3...).
-    """
     m = re.match(r"^(Chromosome|chromosome)\s*0*([0-9]+)$", str(chrom_id))
     if m:
         return f"Chr {int(m.group(2))}"
@@ -667,9 +647,7 @@ def plot_circos_like_density(dens_long, top_refs, total_by_bin, gc_df, chrom_ord
     plt.savefig(out_png, bbox_inches="tight")
     plt.close(fig)
 
-# -----------------------
-# RUN
-# -----------------------
+
 bed_df = read_bed_or_empty(BED_FILE)
 
 chrom_order, chrom_lengths = get_fasta_lengths_and_order(FASTA_FILE)

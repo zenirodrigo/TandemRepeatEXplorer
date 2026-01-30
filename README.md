@@ -129,7 +129,7 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
   - `pandas`
   - `matplotlib`
 
-### 📂 Inputs (interactive prompts)
+### 📂 Inputs
 1. Genome FASTA file(s) (space-separated)
 2. Number of chromosome sequences (contigs) to use from each genome FASTA
 3. Reference FASTA file(s) (satDNA monomers OR a satelitome multi-FASTA)
@@ -150,79 +150,68 @@ Inside a folder named after the genome FASTA (basename):
 bash satDNA_density.sh
 ```
 
----
-
----
 
 ---
 
 ## satDNA_similarity.py – Biological clustering of satDNA monomers
 
-### 📜 Description
-**satDNA_similarity.py** is a Python module designed to group **satellite DNA monomers** into biologically meaningful families.
+### Description
+**satDNA_similarity.py** Alignment-based classification of satellite DNA variants and superfamilies
 
-Unlike standard redundancy filters, this tool explicitly accounts for the biological properties of satDNAs:
-
-- **Circularity** (monomers have no fixed start position)
-- **Reverse-complement equivalence**
-- **Insertions and deletions (indels)** included in similarity estimates
-- **Transitive similarity** (if A ~ B and B ~ C, then A ~ C)
-
-Sequences sharing at least a user-defined **minimum identity threshold** (default: 80%) are considered variants of the same satDNA family.
-
-This module is particularly useful for:
-- Removing redundancy in satelitomes
-- Grouping variant monomers prior to downstream analyses
-- Standardizing satDNA family definitions across species
 
 ---
 
-###  Features
-- Handles **circular sequence similarity**
-- Considers **reverse-complement sequences as redundant**
-- Includes **gaps/indels** in identity calculation
-- Supports **very long monomers** (including >5 kb)
-- Uses adaptive **k-mer prefiltering** for computational efficiency
-- Ensures **biological transitivity** of satDNA families
-- Produces clean, strict FASTA outputs compatible with downstream tools
+### satDNA families (variants of the same satellite)
+Sequences are considered **the same satDNA family** when all conditions below are met:
 
----
+- Similarity is evaluated assuming **circular sequences** (no fixed start position)
+- **Reverse-complement orientations** are allowed
+- **Insertions and deletions (gaps)** are included in the alignment
+- Similarity is **reciprocal** (A aligns to B and B aligns to A)
+- The **minimum identity threshold** (default: 80%) is reached 
 
-###  Dependencies
-- **Python 3.8+**
-- Standard Python libraries only  
-(no external bioinformatics dependencies required)
+Only in this case are sequences considered true **variants** and collapsed into a **single family representative**.
 
----
+
+### satDNA superfamilies (homology without redundancy)
+Some satDNA monomers share **partial or asymmetric similarity**, for example:
+
+- A short monomer aligns almost perfectly inside a longer monomer
+- Homology is strong, but sequences are **not variants**
+
+These cases are classified as **superfamilies**.
+
+**Important:**  
+Superfamilies are **not removed**. All sequences are preserved, and their homology is reported separately.
+
+
 
 ### 📂 Input
 - A FASTA file containing **satDNA monomers**  
-  (each entry must follow strict FASTA format: `>ID` followed by the sequence)
+  (strict FASTA format: `>ID` followed by sequence)
 
----
 
-### 📂 Output Files
-Given an input file `satelitoma.fasta`, the script generates:
+### 📂 Output files
+For an input file named `satelitome.fasta`, the script produces:
 
-- `satelitoma.id80.family_reps.fasta`  
-  FASTA file with **one representative sequence per satDNA family**
+- `satelitome.id80.family_reps.fasta`  
+  One representative sequence per **satDNA family**
 
-- `satelitoma.id80.families.tsv`  
-  Tabular file listing family membership for each monomer, including:
-  - family ID
-  - family size
-  - representative ID
-  - member ID
-  - sequence length
+- `satelitome.id80.families.tsv`  
+  Tabular file describing family membership
 
----
+- `satelitome.id80.proof.txt`  
+  Alignment proofs showing **why sequences were grouped as variants**
 
-###  Usage
-The script is designed to be **fully interactive and user-friendly**, requiring only two inputs.
+- `satelitome.id80.superfamilies.tsv`  
+  Pairwise superfamily relationships (homology without collapsing)
 
+
+### Usage
 ```bash
 python3 satDNA_similarity.py
 ```
+
 
 ---
 

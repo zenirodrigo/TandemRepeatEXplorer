@@ -44,7 +44,7 @@ It processes multiple genomes and reference monomers, runs **[BLAST+](https://bl
 
 > 💡 For variants in reference files — e.g., two slightly different monomers or the same repeat from different species, include an underscore `_` in the filename.
 
-### ✅ Features
+###  Features
 - Processes **multiple genome assemblies** and reference monomer files
 - Fully automated **BLAST** analysis with configurable parameters
 - Merges nearby repeat hits (< 2000 bp apart)
@@ -55,7 +55,7 @@ It processes multiple genomes and reference monomers, runs **[BLAST+](https://bl
 - Handles `.fa`, `.fna`, `.fasta` formats
 - Parallel processing using **[GNU parallel](https://www.gnu.org/software/parallel/)**
 
-### 🛠️ Dependencies
+###  Dependencies
 - **BLAST+** (`makeblastdb`, `blastn`)
 - **[GNU parallel](https://www.gnu.org/software/parallel/)**
 - **Python 3** with:
@@ -84,7 +84,7 @@ pip install biopython pandas matplotlib seaborn
 - `array_frequency_heatmap.png`
 - `array_chromosome_vs_size_scatter.png`
 
-### 🚀 Usage
+###  Usage
 ```bash
 bash arrayScope.sh
 ```
@@ -110,18 +110,18 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
   1) **First 10 sequences in the reference FASTA (FASTA order)**  
   2) **Top 10 most abundant (by total bp covered in genome hits)**
 
-> ✅ IMPORTANT: contig/chromosome IDs are **not re-ordered and not re-indexed**.  
+>  IMPORTANT: contig/chromosome IDs are **not re-ordered and not re-indexed**.  
 > The plot only applies a **safe abbreviation** for labels: `ChromosomeN` → `Chr N`.  
 > All other IDs remain unchanged (e.g., `B1`, `Sex_chromosome`, `scaffold_1`, `unplaced` and any other name.).
 
-### ✅ Features
+###  Features
 - Works with **multiple genome FASTA** files
 - Uses only the **first N contigs/chromosomes** from each genome (preserving FASTA order)
 - BLAST hits are merged within **2000 bp** only when on the **same chromosome AND same satDNA**
 - Parallel BLAST execution using **GNU parallel**
 - Produces both figures and tabular outputs (TSV) for downstream analysis
 
-### 🛠️ Dependencies
+###  Dependencies
 - **BLAST+** (`makeblastdb`, `blastn`)
 - **GNU parallel**
 - **Python 3.8+** with:
@@ -145,7 +145,7 @@ Inside a folder named after the genome FASTA (basename):
 - `gc_track_100kb_full.tsv`
 - `satelitome_density_circos_like.png`
 
-### 🚀 Usage
+###  Usage
 ```bash
 bash satDNA_density.sh
 ```
@@ -177,7 +177,7 @@ This module is particularly useful for:
 
 ---
 
-### ✅ Key Features
+###  Features
 - Handles **circular sequence similarity**
 - Considers **reverse-complement sequences as redundant**
 - Includes **gaps/indels** in identity calculation
@@ -188,7 +188,7 @@ This module is particularly useful for:
 
 ---
 
-### 🛠️ Dependencies
+###  Dependencies
 - **Python 3.8+**
 - Standard Python libraries only  
 (no external bioinformatics dependencies required)
@@ -217,7 +217,7 @@ Given an input file `satelitoma.fasta`, the script generates:
 
 ---
 
-### 🚀 Usage
+###  Usage
 The script is designed to be **fully interactive and user-friendly**, requiring only two inputs.
 
 ```bash
@@ -231,7 +231,7 @@ python3 satDNA_similarity.py
 ### 📜 Description
 Automates the retrieval of genomic sequences for a given gene across multiple species using **[NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK179288/)** and **datasets CLI**.
 
-### ✅ Features
+###  Features
 - Searches for Gene ID using gene symbol and species name
 - Extracts genomic coordinates from NCBI
 - Fallback to RNA FASTA if coordinates are missing
@@ -239,7 +239,7 @@ Automates the retrieval of genomic sequences for a given gene across multiple sp
 - Reverse-complements negative strands automatically
 - Outputs FASTA files named by gene and species
 
-### 🛠️ Dependencies
+###  Dependencies
 ```bash
 conda install -c bioconda entrez-direct datasets-cli seqkit
 ```
@@ -252,7 +252,7 @@ Also requires: unzip, cut, sed, find, head
 ### 📂 Output Files
 - `{GENE_SYMBOL}_{SPECIES_NAME}.fasta`
 
-### 🚀 Usage
+###  Usage
 ```bash
 bash gene_extractor.sh BRCA1 species.txt
 ```
@@ -264,14 +264,14 @@ bash gene_extractor.sh BRCA1 species.txt
 ### 📜 Description
 **satFlank.sh** identifies satellite DNA flanking regions using **BLAST**, extracts sequences, and compares with GFF annotations to find overlapping genes.
 
-### ✅ Features
+###  Features
 - Multiplies reference sequence for improved BLAST sensitivity
 - Filters `.bed` to keep largest non-overlapping regions
 - Sequence extraction with **seqtk**
 - Gene overlap analysis from GFF
 - Parallel processing
 
-### 🛠️ Dependencies
+###  Dependencies
 ```bash
 sudo apt-get install blast2 seqtk parallel
 ```
@@ -286,7 +286,7 @@ sudo apt-get install blast2 seqtk parallel
 - Extracted sequences (FASTA)
 - Gene overlap table (TSV)
 
-### 🚀 Usage
+###  Usage
 ```bash
 bash satFlank.sh
 ```
@@ -301,10 +301,6 @@ You will be prompted to enter:
 8. Final output file name for GFF analysis
 
 
-## 📌 Notes & Best Practices
-- Use biologically relevant reference sequences for better BLAST detection
-- Ensure the `.gff` file matches the genome assembly used in the library file
-
 
 ---
 
@@ -313,7 +309,7 @@ You will be prompted to enter:
 ### 📜 Description
 monoMiner performs reference-guided motif discovery from sequencing libraries, enabling rapid detection and clustering of tandem repeat motifs across multiple datasets with parallel processing and automated filtering.
 
-### 🛠️ Dependencies
+###  Dependencies
 - **Python 3**
 - **cd_hit_filter_size.py**
 - Standard Python libraries
@@ -327,7 +323,7 @@ Follow instructions at [CD-HIT](https://github.com/weizhongli/cdhit) Official Re
 Ensure cd_hit_filter_size.py is in your PATH.
 
 
-### 🚀 Usage
+###  Usage
 Step 1: Prepare Files
 Reference: A .fasta file with the reference sequence.
 

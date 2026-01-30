@@ -11,6 +11,7 @@
 Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identification, characterization, and visualization of tandem arrays from genome assemblies and short-read sequencing data.
 
 - **arrayScope.sh** – Characterizing and locating tandem repeat arrays in assembled genomes.
+- **satDNA_density.sh** - Generating a circus overview of satDNAs distributions across a  genome assembly.
 - **satFlank.sh** – Studying the neighborhood of arrays using the assembled genome and its annotation.
 - **monoMiner.py** – Automated pipeline for identifying biological motifs in sequencing libraries, with parallel processing and intelligent filtering.
 - **gene_extractor.sh** – Automates the retrieval and extraction of the genomic sequence of a specific gene across multiple species using NCBI tools.

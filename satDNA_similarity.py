@@ -466,6 +466,7 @@ def run(fasta: str, identity_threshold: float) -> None:
     out_tsv = base + f".id{int(identity_threshold*100)}.families.tsv"
     out_report = base + f".id{int(identity_threshold*100)}.proof.txt"
     out_super = base + f".id{int(identity_threshold*100)}.superfamilies.tsv"
+    out_simple = base + f".id{int(identity_threshold*100)}.families.simple.txt"
 
     reps = []
     with open(out_tsv, "w", encoding="utf-8") as tsv:
@@ -479,6 +480,7 @@ def run(fasta: str, identity_threshold: float) -> None:
 
     write_fasta(out_fasta, reps)
 
+    # Superfamilies TSV
     with open(out_super, "w", encoding="utf-8") as out:
         out.write(
             "query_id\ttarget_id\tquery_len\ttarget_len\tdirection\tbest_orientation\t"
@@ -491,6 +493,25 @@ def run(fasta: str, identity_threshold: float) -> None:
                 f"{d['direction']}\t{d['best_orientation']}\t{d['identity_oneway']:.4f}\t"
                 f"{d['identity_reciprocal_min']:.4f}\t{d['shared_signals']}\n"
             )
+
+    with open(out_simple, "w", encoding="utf-8") as out:
+        fam_num = 0
+        for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
+            fam_num += 1
+            rep = min(members, key=lambda x: ids[x])
+            rep_id = ids[rep]
+            out.write(f"Family-{fam_num} (rep={rep_id}, size={len(members)}):\n")
+
+            if len(members) == 1:
+                out.write(f"{rep_id} - {rep_id} - 100.0%\n\n")
+                continue
+
+            for m in sorted(members, key=lambda x: ids[x]):
+                if m == rep:
+                    continue
+                id_best, rel = best_direction_identity(seqs[rep], seqs[m])
+                out.write(f"{rep_id} - {ids[m]} - {id_best * 100:.1f}% (best: {rel})\n")
+            out.write("\n")
 
     edges_by_root = defaultdict(list)
     for i, j, proof in proof_edges:
@@ -507,6 +528,7 @@ def run(fasta: str, identity_threshold: float) -> None:
     report.append("")
     report.append(f"# Stats: sequences={n}, families={len(families)}, candidate_pairs={compared_candidates}, alignments={alignments_done}, unions={unions}")
     report.append(f"# Superfamily links written to: {out_super}")
+    report.append(f"# Simple family summary written to: {out_simple}")
     report.append("")
 
     for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
@@ -563,6 +585,7 @@ def run(fasta: str, identity_threshold: float) -> None:
     print(f"TSV:         {out_tsv}")
     print(f"REPORT:      {out_report}")
     print(f"SUPERFAMS:   {out_super}")
+    print(f"FAM_SIMPLE:  {out_simple}")
 
 
 if __name__ == "__main__":

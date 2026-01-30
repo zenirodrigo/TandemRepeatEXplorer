@@ -44,6 +44,7 @@ ALIGN_WRAP = 120
 
 MAX_SUPERFAMS_PER_QUERY = 200
 
+
 def clean_id(h: str) -> str:
     return h.strip().split()[0]
 
@@ -86,6 +87,16 @@ def write_fasta(path: str, records: List[Tuple[str, str]]) -> None:
 def revcomp(seq: str) -> str:
     return seq.translate(DNA_COMP)[::-1]
 
+
+def revcomp_kmer(km: str) -> str:
+    return km.translate(DNA_COMP)[::-1]
+
+
+def canonical_kmer(km: str) -> str:
+    rc = revcomp_kmer(km)
+    return km if km <= rc else rc
+
+
 class UnionFind:
     def __init__(self, n: int):
         self.parent = list(range(n))
@@ -103,6 +114,7 @@ class UnionFind:
         self.parent[rb] = ra
         return True
 
+
 def choose_k_and_min_shared(seq_len: int) -> Tuple[int, int]:
     if seq_len >= 5000:
         return 13, 6
@@ -114,18 +126,28 @@ def choose_k_and_min_shared(seq_len: int) -> Tuple[int, int]:
 
 
 def circular_kmers_set(seq: str, k: int) -> set:
+    """
+    RC-aware circular k-mers:
+    we index canonical(kmer) = min(kmer, RC(kmer))
+    so reverse-complement matches are discoverable in the prefilter.
+    """
     n = len(seq)
     if n < k:
         return set()
     s2 = seq + seq
-    return {s2[i:i + k] for i in range(0, n)}
+    out = set()
+    for i in range(0, n):
+        km = s2[i:i + k]
+        out.add(canonical_kmer(km))
+    return out
+
 
 def semiglobal_identity_only(A: str, B2: str) -> float:
     n = len(A)
     m = len(B2)
 
     dp = [[0] * (m + 1) for _ in range(n + 1)]
-    tb = [[0] * (m + 1) for _ in range(n + 1)] 
+    tb = [[0] * (m + 1) for _ in range(n + 1)]
 
     for i in range(1, n + 1):
         dp[i][0] = dp[i - 1][0] + GAP_SCORE
@@ -271,10 +293,6 @@ def best_direction_alignment(A: str, B: str) -> Tuple[float, str, str, str]:
 
 
 def reciprocal_identity_only(A: str, B: str) -> Tuple[float, float, str, float, str]:
-    """
-    Returns:
-      id_min, id_A_to_B, rel_A_to_B, id_B_to_A, rel_B_to_A
-    """
     id1, rel1 = best_direction_identity(A, B)
     id2, rel2 = best_direction_identity(B, A)
     id_min = id1 if id1 <= id2 else id2
@@ -298,6 +316,7 @@ def pretty_alignment(alnA: str, alnB: str) -> str:
         out.append("")
     return "\n".join(out).rstrip()
 
+
 def ask_user() -> Tuple[str, float]:
     print("\n=== satDNA Similarity Clustering ===")
     print("This program groups satellite DNA monomers into families based on")
@@ -312,6 +331,7 @@ def ask_user() -> Tuple[str, float]:
     ).strip() or "0.80")
 
     return fasta, identity
+
 
 def run(fasta: str, identity_threshold: float) -> None:
     t0 = time.time()
@@ -354,7 +374,6 @@ def run(fasta: str, identity_threshold: float) -> None:
     unions = 0
 
     proof_edges = []
-
     superfamily_hits = []
 
     for i in range(n):
@@ -438,7 +457,6 @@ def run(fasta: str, identity_threshold: float) -> None:
                 })
                 superfams_for_i += 1
 
-    # Build families (final)
     families = defaultdict(list)
     for i in range(n):
         families[uf.find(i)].append(i)
@@ -449,7 +467,6 @@ def run(fasta: str, identity_threshold: float) -> None:
     out_report = base + f".id{int(identity_threshold*100)}.proof.txt"
     out_super = base + f".id{int(identity_threshold*100)}.superfamilies.tsv"
 
-    # Representatives + TSV
     reps = []
     with open(out_tsv, "w", encoding="utf-8") as tsv:
         tsv.write("family_id\tfamily_size\trep_id\tmember_id\tmember_len\n")
@@ -462,7 +479,6 @@ def run(fasta: str, identity_threshold: float) -> None:
 
     write_fasta(out_fasta, reps)
 
-    # Superfamilies TSV
     with open(out_super, "w", encoding="utf-8") as out:
         out.write(
             "query_id\ttarget_id\tquery_len\ttarget_len\tdirection\tbest_orientation\t"
@@ -489,7 +505,6 @@ def run(fasta: str, identity_threshold: float) -> None:
     report.append(f"# Prefilter: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
     report.append(f"# Scoring: match={MATCH_SCORE}, mismatch={MISMATCH_SCORE}, gap={GAP_SCORE}")
     report.append("")
-
     report.append(f"# Stats: sequences={n}, families={len(families)}, candidate_pairs={compared_candidates}, alignments={alignments_done}, unions={unions}")
     report.append(f"# Superfamily links written to: {out_super}")
     report.append("")

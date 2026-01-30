@@ -1,9 +1,5 @@
 #!/bin/bash
 
-########################################
-# User Input Collection (pre-execution)
-########################################
-
 # BLAST Part:
 read -e -p "Enter the library file name: " input_biblio
 read -e -p "Enter the reference file name: " referencia
@@ -20,10 +16,6 @@ if [ ! -f "$arquivo_gff" ]; then
 fi
 read -e -p "Enter the final output file name for GFF analysis: " arquivo_final
 
-########################################
-# Initial Configuration
-########################################
-
 # Enable filename autocompletion
 shopt -s progcomp
 _autocomplete() {
@@ -31,10 +23,6 @@ _autocomplete() {
     COMPREPLY=( $(compgen -f -- "$cur") )
 }
 complete -F _autocomplete read
-
-########################################
-# Part 1: BLAST and .bed File Generation
-########################################
 
 # Multiply the reference sequence
 awk 'NR % 2 == 0 { for (i=0; i<'$multiplicador'; i++) printf $0 } NR % 2 != 0' "$referencia" > referencia_multiplicada.fasta
@@ -53,10 +41,6 @@ fi
 
 # Generate .bed file with valid monomers (pre-filtering)
 awk '{start=($9 < $10) ? $9 : $10; end=($9 < $10) ? $10 : $9; print $2, start - 5000, end + 5000}' "$saida_blast" > monomeros_validos.bed
-
-########################################
-# Filter .bed File to Remove Redundant Regions
-########################################
 
 # Sort .bed by chromosome and start coordinate
 sort -k1,1 -k2,2n monomeros_validos.bed > monomeros_validos.sorted.bed
@@ -87,14 +71,10 @@ echo "Generated and filtered .bed file: monomeros_validos.filtrado.bed"
 seqtk subseq "$input_biblio" monomeros_validos.filtrado.bed > "$output_seqtk"
 echo "BLAST step completed. Extracted sequences saved to $output_seqtk"
 
-########################################
-# Part 2: .bed File Comparison with .gff
-########################################
-
 # Use the filtered .bed file from Part 1:
 arquivo_bed="monomeros_validos.filtrado.bed"
 
-# Convert spaces to tabs in .bed (ensure correct format)
+# Convert spaces to tabs in .bed
 sed -i 's/ \+/\t/g' "$arquivo_bed"
 
 # Preprocess GFF: create a temporary indexed file by chromosome

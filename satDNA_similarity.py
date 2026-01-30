@@ -4,7 +4,7 @@
 import os
 import time
 from collections import defaultdict
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict
 
 try:
     import readline
@@ -31,15 +31,18 @@ DNA_COMP = str.maketrans("ACGTNacgtn", "TGCANtgcan")
 VALID = set("ACGTN")
 
 FASTA_WRAP = 60
+
 MATCH_SCORE = 2
 MISMATCH_SCORE = -1
 GAP_SCORE = -2
+
 PROGRESS_EVERY_SEQS = 25
 PROGRESS_EVERY_ALNS = 200
+
 MAX_PROOFS_PER_FAMILY = 10
 ALIGN_WRAP = 120
 
-
+MAX_SUPERFAMS_PER_QUERY = 200
 
 def clean_id(h: str) -> str:
     return h.strip().split()[0]
@@ -100,8 +103,6 @@ class UnionFind:
         self.parent[rb] = ra
         return True
 
-
-
 def choose_k_and_min_shared(seq_len: int) -> Tuple[int, int]:
     if seq_len >= 5000:
         return 13, 6
@@ -119,14 +120,12 @@ def circular_kmers_set(seq: str, k: int) -> set:
     s2 = seq + seq
     return {s2[i:i + k] for i in range(0, n)}
 
-
-# Semi-global alignment
 def semiglobal_identity_only(A: str, B2: str) -> float:
     n = len(A)
     m = len(B2)
 
     dp = [[0] * (m + 1) for _ in range(n + 1)]
-    tb = [[0] * (m + 1) for _ in range(n + 1)]
+    tb = [[0] * (m + 1) for _ in range(n + 1)] 
 
     for i in range(1, n + 1):
         dp[i][0] = dp[i - 1][0] + GAP_SCORE
@@ -183,9 +182,6 @@ def semiglobal_identity_only(A: str, B2: str) -> float:
 
 
 def semiglobal_alignment(A: str, B2: str) -> Tuple[float, str, str]:
-    """
-    Returns identity + aligned strings (for proof report).
-    """
     n = len(A)
     m = len(B2)
 
@@ -274,14 +270,15 @@ def best_direction_alignment(A: str, B: str) -> Tuple[float, str, str, str]:
     return id_rc, "reverse-complement", a2, b2
 
 
-def reciprocal_identity_only(A: str, B: str) -> Tuple[float, float, float]:
-    id1, _rel1 = best_direction_identity(A, B)
-    id2, _rel2 = best_direction_identity(B, A)
-    return (id1 if id1 <= id2 else id2), id1, id2
-
-
-def wrap_line(s: str, width: int) -> str:
-    return "\n".join(s[i:i + width] for i in range(0, len(s), width))
+def reciprocal_identity_only(A: str, B: str) -> Tuple[float, float, str, float, str]:
+    """
+    Returns:
+      id_min, id_A_to_B, rel_A_to_B, id_B_to_A, rel_B_to_A
+    """
+    id1, rel1 = best_direction_identity(A, B)
+    id2, rel2 = best_direction_identity(B, A)
+    id_min = id1 if id1 <= id2 else id2
+    return id_min, id1, rel1, id2, rel2
 
 
 def pretty_alignment(alnA: str, alnB: str) -> str:
@@ -292,7 +289,7 @@ def pretty_alignment(alnA: str, alnB: str) -> str:
         else:
             mid.append(" ")
     mid = "".join(mid)
-    # wrap
+
     out = []
     for i in range(0, len(alnA), ALIGN_WRAP):
         out.append("A: " + alnA[i:i + ALIGN_WRAP])
@@ -303,15 +300,15 @@ def pretty_alignment(alnA: str, alnB: str) -> str:
 
 def ask_user() -> Tuple[str, float]:
     print("\n=== satDNA Similarity Clustering ===")
-    print("Groups monomers into satDNA families using circular similarity,")
-    print("reverse-complement equivalence, and gaps/indels included in identity.\n")
+    print("This program groups satellite DNA monomers into families based on")
+    print("circular sequence similarity, allowing reverse-complement and gaps.\n")
     print("Tip: use TAB to autocomplete file paths.\n")
 
-    fasta = input("Input FASTA file with MONOMER sequences: ").strip()
+    fasta = input("Input FASTA file with monomer sequences: ").strip()
     fasta = os.path.expanduser(fasta)
 
     identity = float(input(
-        "Minimum identity threshold (e.g. 0.80 = 80%) [0.80]: "
+        "Minimum identity threshold (e.g. 0.80 = 80% similarity) [0.80]: "
     ).strip() or "0.80")
 
     return fasta, identity
@@ -325,21 +322,21 @@ def run(fasta: str, identity_threshold: float) -> None:
     ids = [r[0] for r in records]
     seqs = [r[1] for r in records]
     lens = [len(s) for s in seqs]
-
     n = len(seqs)
+
     min_len = min(lens)
     max_len = max(lens)
     med_len = sorted(lens)[n // 2]
 
     print(f"\nLoaded {n} sequences.")
     print(f"Length stats (bp): min={min_len} median={med_len} max={max_len}")
-    print("Building k-mer index (performance depends on monomer length)...")
+    print("Building k-mer index...")
 
     K, MIN_SHARED = choose_k_and_min_shared(med_len)
     MAX_CANDIDATES_PER_SEQ = 3000
 
-    print(f"Internal prefilter settings: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
-    print("Clustering... (this may take time for very long monomers)")
+    print(f"Internal prefilter: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
+    print("Clustering + detecting superfamilies...")
 
     uf = UnionFind(n)
 
@@ -358,10 +355,12 @@ def run(fasta: str, identity_threshold: float) -> None:
 
     proof_edges = []
 
+    superfamily_hits = []
+
     for i in range(n):
         if i % PROGRESS_EVERY_SEQS == 0 and i > 0:
             dt = time.time() - t0
-            print(f"Progress: {i}/{n} sequences processed | alignments={alignments_done} | unions={unions} | elapsed={dt:.1f}s")
+            print(f"Progress: {i}/{n} | alignments={alignments_done} | unions={unions} | elapsed={dt:.1f}s")
 
         counts = defaultdict(int)
         for km in kmers_by_i[i]:
@@ -374,42 +373,72 @@ def run(fasta: str, identity_threshold: float) -> None:
         candidates.sort(key=lambda x: x[1], reverse=True)
         if len(candidates) > MAX_CANDIDATES_PER_SEQ:
             candidates = candidates[:MAX_CANDIDATES_PER_SEQ]
+        superfams_for_i = 0
 
         for j, shared in candidates:
             compared_candidates += 1
-            if uf.find(i) == uf.find(j):
-                continue
-            id_min, id_i_to_j, id_j_to_i = reciprocal_identity_only(seqs[i], seqs[j])
+
+            id_min, id_i_to_j, rel_i_to_j, id_j_to_i, rel_j_to_i = reciprocal_identity_only(seqs[i], seqs[j])
             alignments_done += 1
 
             if alignments_done % PROGRESS_EVERY_ALNS == 0:
                 dt = time.time() - t0
                 print(f"  Alignments computed: {alignments_done} | elapsed={dt:.1f}s")
 
-            if id_min + 1e-12 < identity_threshold:
+            if id_min + 1e-12 >= identity_threshold:
+                if uf.find(i) == uf.find(j):
+                    continue
+
+                if uf.union(i, j):
+                    unions += 1
+
+                    id_ab, rel_ab, alnA_ab, alnB_ab = best_direction_alignment(seqs[i], seqs[j])
+                    id_ba, rel_ba, alnA_ba, alnB_ba = best_direction_alignment(seqs[j], seqs[i])
+
+                    proof_edges.append((
+                        i, j,
+                        {
+                            "id_min": id_min,
+                            "A_id": ids[i], "B_id": ids[j],
+                            "A_len": lens[i], "B_len": lens[j],
+                            "A_to_B": {"identity": id_ab, "relation": rel_ab, "alnA": alnA_ab, "alnB": alnB_ab},
+                            "B_to_A": {"identity": id_ba, "relation": rel_ba, "alnA": alnA_ba, "alnB": alnB_ba},
+                        }
+                    ))
                 continue
 
-            if uf.union(i, j):
-                unions += 1
-                id_ab, rel_ab, alnA_ab, alnB_ab = best_direction_alignment(seqs[i], seqs[j])
-                id_ba, rel_ba, alnA_ba, alnB_ba = best_direction_alignment(seqs[j], seqs[i])
+            one_way_best = id_i_to_j if id_i_to_j >= id_j_to_i else id_j_to_i
+            if one_way_best + 1e-12 >= identity_threshold:
+                if superfams_for_i >= MAX_SUPERFAMS_PER_QUERY:
+                    continue
 
-                proof_edges.append((
-                    i, j,
-                    {
-                        "id_min": id_min,
-                        "id_i_to_j": id_i_to_j,
-                        "id_j_to_i": id_j_to_i,
-                        "A_id": ids[i],
-                        "B_id": ids[j],
-                        "A_len": lens[i],
-                        "B_len": lens[j],
-                        "A_to_B": {"identity": id_ab, "relation": rel_ab, "alnA": alnA_ab, "alnB": alnB_ab},
-                        "B_to_A": {"identity": id_ba, "relation": rel_ba, "alnA": alnA_ba, "alnB": alnB_ba},
-                    }
-                ))
+                if id_i_to_j >= id_j_to_i:
+                    query = i
+                    target = j
+                    rel = rel_i_to_j
+                    id_oneway = id_i_to_j
+                    direction = "A_in_B"
+                else:
+                    query = j
+                    target = i
+                    rel = rel_j_to_i
+                    id_oneway = id_j_to_i
+                    direction = "B_in_A"
 
-    # Build families
+                superfamily_hits.append({
+                    "query_id": ids[query],
+                    "target_id": ids[target],
+                    "query_len": lens[query],
+                    "target_len": lens[target],
+                    "direction": direction,
+                    "best_orientation": rel,
+                    "identity_oneway": id_oneway,
+                    "identity_reciprocal_min": id_min,
+                    "shared_signals": shared,
+                })
+                superfams_for_i += 1
+
+    # Build families (final)
     families = defaultdict(list)
     for i in range(n):
         families[uf.find(i)].append(i)
@@ -418,6 +447,7 @@ def run(fasta: str, identity_threshold: float) -> None:
     out_fasta = base + f".id{int(identity_threshold*100)}.family_reps.fasta"
     out_tsv = base + f".id{int(identity_threshold*100)}.families.tsv"
     out_report = base + f".id{int(identity_threshold*100)}.proof.txt"
+    out_super = base + f".id{int(identity_threshold*100)}.superfamilies.tsv"
 
     # Representatives + TSV
     reps = []
@@ -431,6 +461,21 @@ def run(fasta: str, identity_threshold: float) -> None:
                 tsv.write(f"{fam_id}\t{len(members)}\t{ids[rep]}\t{ids[m]}\t{lens[m]}\n")
 
     write_fasta(out_fasta, reps)
+
+    # Superfamilies TSV
+    with open(out_super, "w", encoding="utf-8") as out:
+        out.write(
+            "query_id\ttarget_id\tquery_len\ttarget_len\tdirection\tbest_orientation\t"
+            "identity_oneway\tidentity_reciprocal_min\tshared_signals\n"
+        )
+        superfamily_hits.sort(key=lambda d: (d["identity_oneway"], d["shared_signals"]), reverse=True)
+        for d in superfamily_hits:
+            out.write(
+                f"{d['query_id']}\t{d['target_id']}\t{d['query_len']}\t{d['target_len']}\t"
+                f"{d['direction']}\t{d['best_orientation']}\t{d['identity_oneway']:.4f}\t"
+                f"{d['identity_reciprocal_min']:.4f}\t{d['shared_signals']}\n"
+            )
+
     edges_by_root = defaultdict(list)
     for i, j, proof in proof_edges:
         r = uf.find(i)
@@ -439,13 +484,14 @@ def run(fasta: str, identity_threshold: float) -> None:
 
     report = []
     report.append("# satDNA_similarity.py proof report")
-    report.append("# Families are built using reciprocal circular identity with reverse-complement and gaps included.")
-    report.append(f"# Identity threshold (min of both directions): {identity_threshold}")
+    report.append("# Families: reciprocal circular identity (forward/RC) with gaps included.")
+    report.append(f"# Identity threshold (family): {identity_threshold}")
     report.append(f"# Prefilter: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
     report.append(f"# Scoring: match={MATCH_SCORE}, mismatch={MISMATCH_SCORE}, gap={GAP_SCORE}")
     report.append("")
 
     report.append(f"# Stats: sequences={n}, families={len(families)}, candidate_pairs={compared_candidates}, alignments={alignments_done}, unions={unions}")
+    report.append(f"# Superfamily links written to: {out_super}")
     report.append("")
 
     for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
@@ -461,7 +507,7 @@ def run(fasta: str, identity_threshold: float) -> None:
 
         proofs = edges_by_root.get(root, [])
         if not proofs:
-            report.append("No stored union-edge proofs for this family (this can happen for singleton families).")
+            report.append("No stored union-edge proofs for this family (singleton or no union edges stored).")
             report.append("")
             continue
 
@@ -471,9 +517,9 @@ def run(fasta: str, identity_threshold: float) -> None:
         printed = 0
         for p in proofs:
             report.append(f"[EDGE] {p['A_id']} (len={p['A_len']})  <->  {p['B_id']} (len={p['B_len']})")
-            report.append(f"  Reciprocal identity = min(A→B, B→A) = {p['id_min']:.4f}")
-            report.append(f"  A→B best identity   = {p['A_to_B']['identity']:.4f} (orientation: {p['A_to_B']['relation']})")
-            report.append(f"  B→A best identity   = {p['B_to_A']['identity']:.4f} (orientation: {p['B_to_A']['relation']})")
+            report.append(f"  Reciprocal identity (min of both directions): {p['id_min']:.4f}")
+            report.append(f"  A→B best identity = {p['A_to_B']['identity']:.4f} (orientation: {p['A_to_B']['relation']})")
+            report.append(f"  B→A best identity = {p['B_to_A']['identity']:.4f} (orientation: {p['B_to_A']['relation']})")
             report.append("")
             report.append("  Alignment A→B:")
             report.append(pretty_alignment(p["A_to_B"]["alnA"], p["A_to_B"]["alnB"]))
@@ -497,10 +543,11 @@ def run(fasta: str, identity_threshold: float) -> None:
     print(f"Families:  {len(families)}")
     print(f"Candidate pairs evaluated: {compared_candidates}")
     print(f"Alignments computed:       {alignments_done}")
-    print(f"Unions (links added):      {unions}")
-    print(f"FASTA reps: {out_fasta}")
-    print(f"TSV:        {out_tsv}")
-    print(f"REPORT:     {out_report}")
+    print(f"Unions (family links):     {unions}")
+    print(f"FASTA reps:  {out_fasta}")
+    print(f"TSV:         {out_tsv}")
+    print(f"REPORT:      {out_report}")
+    print(f"SUPERFAMS:   {out_super}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,32 @@
+name: trex_env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - python=3.10
+
+  # Core CLIs used across T-REx modules
+  - blast
+  - bedtools
+  - parallel
+  - seqtk
+  - seqkit
+  - entrez-direct
+  - ncbi-datasets-cli
+
+  # Basic Unix tools (usually present, but safe to include)
+  - unzip
+  - gawk
+  - sed
+  - coreutils
+  - findutils
+
+  # Python stack
+  - numpy
+  - pandas
+  - matplotlib
+  - biopython
+
+  - pip

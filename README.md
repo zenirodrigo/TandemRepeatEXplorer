@@ -30,10 +30,15 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 ```bash
 git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
 cd T-REx
+conda env create -f environment.yml
+conda activate trex_env
+
 bash arrayScope.sh
+base satDNA_density.sh
+python3 satDNA_similarity.py
 bash satFlank.sh
+bash gene_extractor.sh BRCA1 species.txt #here we use the BRCA1 ONLY FOR A EXEMPLE
 python3 monoMiner.py
-bash gene_extractor.sh BRCA1 species.txt
 ```
 
 ## arrayScope.sh – Genome Repeat Analysis Pipeline

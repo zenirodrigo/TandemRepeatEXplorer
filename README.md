@@ -89,8 +89,11 @@ pip install biopython pandas matplotlib seaborn
 bash arrayScope.sh
 
 ```
-### Exemple of plot
-<img width="10751" height="7174" alt="hap1-sats" src="https://github.com/user-attachments/assets/87b16b6c-7095-42d2-81ce-8c436ec80e19" />
+### Exemple of results
+<img width="3558" height="2373" alt="array_chromosome_vs_size_scatter" src="https://github.com/user-attachments/assets/e68dd204-1049-48d8-808a-f706f3f8b5d2" />
+<img width="10772" height="7174" alt="chromosomes_with_annotations" src="https://github.com/user-attachments/assets/96fc8939-23a9-46fa-b957-52c160d372ae" />
+
+
 
 ---
 

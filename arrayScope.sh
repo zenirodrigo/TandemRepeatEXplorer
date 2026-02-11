@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Enable filename autocompletion
 shopt -s progcomp
 
 _autocomplete() {
@@ -37,7 +38,7 @@ run_blast_for_ref() {
     awk 'NR % 2 == 0 { for (i=0;i<'"$multiplier"';i++) printf $0 } NR % 2 != 0' "$ref_fasta" > multiplied_reference_${ref_no_ext}.fasta
 
     local blast_output="blast_${ref_no_ext}.out"
-    blastn -task blastn -outfmt "6" -db "$temp_genome" -query "multiplied_reference_${ref_no_ext}.fasta" -out "$blast_output" -evalue 1e-10 -qcov_hsp_perc 70 -num_threads 30
+    blastn -task blastn -outfmt "6" -db "$temp_genome" -query "multiplied_reference_${ref_no_ext}.fasta" -out "$blast_output" -evalue 1e-10 -qcov_hsp_perc 50 -num_threads 1
 
     if [ ! -s "$blast_output" ]; then
         echo "BLAST found no matches for $ref_no_ext"
@@ -67,10 +68,10 @@ read -e -p "Enter genome file names (space-separated): " input_biblios
 read -p "How many chromosomes sequences will be used? " num_sequences
 read -e -p "Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): " refs_in
 read -p "How many monomers will be used to create a array (here is the minimum monomers to form a array in this study)? " multiplier
-read -p "How many threads will be used? (ex: 4, 8, etc.): " NUM_THREADS
+read -p "Quantas threads deseja utilizar? (ex: 4, 8, etc.): " NUM_THREADS
 
 if ! command -v parallel &> /dev/null; then
-    echo "Error: GNU parallel not found. Use: conda install -c conda-forge parallel"
+    echo "Erro: GNU parallel não está instalado. Use: conda install -c conda-forge parallel"
     exit 1
 fi
 
@@ -110,7 +111,7 @@ for input_biblio in $input_biblios; do
 
     mv "$temp_bed" "$genome_name/valid_monomers.bed"
 
-    echo "Arquivo valid_monomers.bed created in $genome_name."
+    echo "Arquivo valid_monomers.bed criado para $genome_name."
 
 python3 - <<EOF
 import os
@@ -159,8 +160,10 @@ def merge_intervals(df):
             merged.append([chrom, current_start, current_end, list(refs)])
     return pd.DataFrame(merged, columns=['Chromosome', 'Start', 'End', 'References'])
 
+# Arquivo de cores persistente
 color_file = "reference_colors.json"
 
+# Carregar ou criar mapa de cores persistente
 if os.path.exists(color_file):
     with open(color_file, 'r') as f:
         color_map = json.load(f)
@@ -178,6 +181,7 @@ df_merged = merge_intervals(df_filtered)
 bed_refs = df_merged['References'].explode().unique()
 all_refs = sorted(bed_refs, key=natural_sort_key)
 
+# Atualizar color_map com novas referências, se necessário
 missing_refs = [r for r in all_refs if r not in color_map]
 if missing_refs:
     new_palette = sns.color_palette("hls", len(missing_refs))
@@ -185,9 +189,11 @@ if missing_refs:
         rgb = new_palette[i]
         color_map[ref] = tuple(rgb)
 
+# Salvar mapa de cores atualizado
 with open(color_file, 'w') as f:
     json.dump(color_map, f)
 
+# Converter cores para uso no matplotlib
 color_map = {k: tuple(v) for k, v in color_map.items()}
 
 reference_sizes = {}
@@ -198,6 +204,7 @@ for ref in all_refs:
 
 sorted_chromosomes = sorted(chromosome_lengths.keys(), key=natural_sort_key)
 
+# FIGURA 1 - Mapa linear dos cromossomos
 plt.figure(figsize=(36, 24))
 spacing = 1.5
 for idx, chrom in enumerate(sorted_chromosomes):
@@ -235,6 +242,7 @@ plt.grid(False)
 plt.tight_layout()
 plt.savefig("$genome_name/chromosomes_with_annotations.png", dpi=300, bbox_inches='tight')
 
+# FIGURA 2 - Heatmap
 df_exploded = df_merged.explode('References')
 df_exploded['Size'] = df_exploded['End'] - df_exploded['Start']
 heatmap_data = df_exploded.groupby(['Chromosome', 'References'])['Size'].sum().unstack()
@@ -248,6 +256,7 @@ plt.xticks(rotation=60)
 plt.tight_layout()
 plt.savefig("$genome_name/array_frequency_heatmap.png", dpi=300, bbox_inches='tight')
 
+# FIGURA 3 - Dispersão
 df_exploded['Chromosome'] = pd.Categorical(df_exploded['Chromosome'], categories=sorted_chromosomes, ordered=True)
 plt.figure(figsize=(12, 8))
 sns.scatterplot(data=df_exploded, x='Chromosome', y='Size', hue='References', hue_order=all_refs, palette=color_map, alpha=0.7, s=100)
@@ -260,6 +269,6 @@ plt.grid(True)
 plt.tight_layout()
 plt.savefig("$genome_name/array_chromosome_vs_size_scatter.png", dpi=300, bbox_inches='tight')
 
-print("Done!!!")
+print("Visualization plots saved.")
 EOF
 done

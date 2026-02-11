@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Enable filename autocompletion
 shopt -s progcomp
 
 _autocomplete() {
@@ -27,13 +26,14 @@ make_multiplied_fasta() {
 
     # Robust FASTA reader:
     # - Works with multi-line sequences
-    # - Cleans sequence to ACGTN only (and removes hyphens)
-    # - Writes one record per entry, with proper newlines
+    # - Cleans to ACGTN only (removes hyphens too)
+    # - Guarantees newline after each record
     awk -v m="$multiplier" '
         BEGIN { RS=">"; ORS=""; }
         NR>1 {
             n = split($0, a, "\n");
             header = a[1];
+
             seq = "";
             for (i=2; i<=n; i++) seq = seq a[i];
 
@@ -50,7 +50,7 @@ make_multiplied_fasta() {
 }
 
 run_blast_for_ref() {
-    local ref_no_ext="$1"
+    local ref_no_ext="$1"     # basename sem extensão do arquivo query
     local temp_genome="$2"
     local multiplier="$3"
     local temp_bed="$4"
@@ -72,11 +72,10 @@ run_blast_for_ref() {
 
     local blast_output="blast_${ref_no_ext}.out"
 
-    # IMPORTANT:
-    # - Each parallel job runs its own BLAST -> use -num_threads 1
-    # - Control total CPU via GNU parallel --jobs
+    # OUTFMT agora inclui qseqid explicitamente (coluna 1)
+    # e sseqid (coluna 2), sstart (col 3), send (col 4)
     blastn -task blastn \
-        -outfmt "6" \
+        -outfmt "6 qseqid sseqid sstart send" \
         -db "$temp_genome" \
         -query "$multiplied" \
         -out "$blast_output" \
@@ -89,24 +88,37 @@ run_blast_for_ref() {
         return 0
     fi
 
-    # Merge nearby hits per chromosome (dist=2000)
-    awk '{start=($9 < $10) ? $9 : $10; end=($9 < $10) ? $10 : $9; print $2, start, end}' "$blast_output" \
-    | sort -k1,1 -k2,2n \
+    # Agora o BED carrega o satDNA correto:
+    # Chromosome Start End Reference(qseqid)
+    # Merge nearby hits per (chromosome + qseqid) with dist=2000
+    awk -v OFS='\t' '
+        {
+            q=$1; chr=$2;
+            s=($3<$4)?$3:$4;
+            e=($3<$4)?$4:$3;
+            print q, chr, s, e
+        }
+    ' "$blast_output" \
+    | sort -k2,2 -k1,1 -k3,3n \
     | awk -v OFS='\t' -v dist=2000 '
         {
-            if (NR == 1) { chr=$1; start=$2; end=$3 }
-            else {
-                if ($1 == chr && ($2 <= end + dist)) {
-                    end = ($3 > end) ? $3 : end
+            q=$1; chr=$2; s=$3; e=$4;
+
+            if (NR==1) {
+                cq=q; cchr=chr; cs=s; ce=e;
+            } else {
+                if (q==cq && chr==cchr && s <= ce + dist) {
+                    if (e > ce) ce=e;
                 } else {
-                    print chr, start, end
-                    chr=$1; start=$2; end=$3
+                    print cchr, cs, ce, cq;
+                    cq=q; cchr=chr; cs=s; ce=e;
                 }
             }
         }
-        END { if (NR>0) print chr, start, end }
-    ' \
-    | awk -v ref="$ref_no_ext" '{split(ref, a, "_"); print $0"\t"a[1]}' >> "$temp_bed"
+        END {
+            if (NR>0) print cchr, cs, ce, cq;
+        }
+    ' >> "$temp_bed"
 }
 export -f run_blast_for_ref remove_extensions make_multiplied_fasta
 
@@ -244,7 +256,6 @@ else:
 
 missing_refs = [r for r in all_refs if r not in color_map]
 if missing_refs:
-    # Paleta suave/pastel por padrão
     new_palette = sns.color_palette("pastel", len(missing_refs))
     for i, ref in enumerate(missing_refs):
         rgb = new_palette[i]
@@ -263,7 +274,7 @@ for ref in all_refs:
 
 sorted_chromosomes = sorted(chromosome_lengths.keys(), key=natural_sort_key)
 
-# Plot 1: Chromosomes with annotations
+# Plot 1
 plt.figure(figsize=(36, 24))
 spacing = 1.5
 for idx, chrom in enumerate(sorted_chromosomes):
@@ -304,7 +315,6 @@ plt.tight_layout()
 plt.savefig("$genome_name/chromosomes_with_annotations.png", dpi=300, bbox_inches='tight')
 plt.close()
 
-# Prepare exploded data
 df_exploded = df_merged.explode('References')
 df_exploded = df_exploded[df_exploded['References'].notna()].copy()
 df_exploded['Size'] = df_exploded['End'] - df_exploded['Start']
@@ -313,7 +323,6 @@ if df_exploded.empty:
     print("Dados explodidos vazios. Pulando heatmap e scatter.")
     raise SystemExit(0)
 
-# Plot 2: Heatmap
 heatmap_data = df_exploded.groupby(['Chromosome', 'References'])['Size'].sum().unstack()
 heatmap_data = heatmap_data.reindex(index=sorted_chromosomes, columns=all_refs).fillna(0)
 
@@ -330,7 +339,6 @@ else:
     plt.savefig("$genome_name/array_frequency_heatmap.png", dpi=300, bbox_inches='tight')
     plt.close()
 
-# Plot 3: Scatter
 df_exploded['Chromosome'] = pd.Categorical(df_exploded['Chromosome'], categories=sorted_chromosomes, ordered=True)
 plt.figure(figsize=(12, 8))
 sns.scatterplot(
@@ -357,3 +365,4 @@ print("Visualization plots saved.")
 EOF
 
 done
+

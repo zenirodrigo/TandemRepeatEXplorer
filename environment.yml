@@ -5,28 +5,36 @@ channels:
   - defaults
 
 dependencies:
+  # Base
   - python=3.10
+  - pip
 
-  # Core CLIs used across T-REx modules
+  # BLAST and genomics toolchain used across modules
   - blast
   - bedtools
   - parallel
+
+  # Sequence utilities used by satFlank / gene_extractor
   - seqtk
   - seqkit
+
+  # NCBI retrieval used by gene_extractor.sh (efetch/xtract)
   - entrez-direct
   - ncbi-datasets-cli
 
-  # Basic Unix tools (usually present, but safe to include)
+  # CD-HIT used by monoMiner pipeline (required by cd_hit_filter_size.py workflow)
+  - cd-hit
+
+  # Python packages used by arrayScope / satDNA_density
+  - numpy
+  - pandas
+  - matplotlib
+  - seaborn
+  - biopython
+
+  # Common Unix tools (normalmente já existem, mas garante reprodutibilidade)
   - unzip
   - gawk
   - sed
   - coreutils
   - findutils
-
-  # Python stack
-  - numpy
-  - pandas
-  - matplotlib
-  - biopython
-
-  - pip

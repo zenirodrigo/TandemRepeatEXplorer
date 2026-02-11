@@ -87,8 +87,10 @@ pip install biopython pandas matplotlib seaborn
 ###  Usage
 ```bash
 bash arrayScope.sh
-```
 
+```
+### Exemple of plot
+<img width="10751" height="7174" alt="hap1-sats" src="https://github.com/user-attachments/assets/87b16b6c-7095-42d2-81ce-8c436ec80e19" />
 
 ---
 

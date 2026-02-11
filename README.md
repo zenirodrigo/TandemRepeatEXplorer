@@ -153,6 +153,8 @@ Inside a folder named after the genome FASTA (basename):
 ```bash
 bash satDNA_density.sh
 ```
+### Exemple of results
+<img width="3009" height="2835" alt="satelitome_density_circos_like" src="https://github.com/user-attachments/assets/438e3623-0eaa-40c7-a90d-bd29b250af05" />
 
 
 ---

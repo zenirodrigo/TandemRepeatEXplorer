@@ -174,7 +174,7 @@ bash satDNA_density.sh
 
 ### Features
 - Alignment-based comparison of satDNA monomers
-- Explicit handling of **circular sequences** (no fixed start position)
+- Use the idea of **circular sequences** (no fixed start position)
 - **Reverse-complement equivalence**
 - **Insertions and deletions (gaps)** included in similarity estimates
 - Automatic distinction between **families (variants)** and **superfamilies (homology only)**

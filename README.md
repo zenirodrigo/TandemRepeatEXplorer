@@ -379,14 +379,14 @@ This project is licensed under the MIT License
 - These codes were developed during my PhD, supported by a scholarship from Fundação de Amparo à Pesquisa do Estado de São Paulo (FAPESP).
 
 
-## ⁉️ Contact
+##  Contact
 For questions or improvements, contact:
 **rodrigo.zeni@unesp.br**
 or
 **rodrigo-zeni@outlook.com.br**
 
 
-## 📖 Citation
+##  Citation
 If you use T-REx in your research, please cite the associated publication (in preparation).
 
 

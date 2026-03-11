@@ -24,7 +24,7 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
     GENE_ID=$(esearch -db gene -query "$GENE_SYMBOL[Gene Name] AND $SPECIES_QUERY[Organism]" | efetch -format uid | head -1)
 
     if [ -z "$GENE_ID" ]; then
-        echo "❌ Gene $GENE_SYMBOL not found for $SPECIES_NAME."
+        echo " Gene $GENE_SYMBOL not found for $SPECIES_NAME."
         echo "-------------------------------------------"
         continue
     fi
@@ -44,7 +44,7 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
         datasets download gene gene-id "$GENE_ID" --filename "$ZIP_FILE"
         
         if [ $? -ne 0 ]; then
-            echo "⚠️  Failed to download data for $SPECIES_NAME."
+            echo " Failed to download data for $SPECIES_NAME."
             echo "-------------------------------------------"
             continue
         fi
@@ -58,9 +58,9 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
         if [ -f "$FASTA_FILE" ]; then
             OUTPUT_FILE="${GENE_SYMBOL}_${SPECIES_NAME// /_}.fasta"
             cp "$FASTA_FILE" "$OUTPUT_FILE"
-            echo "✅ Data saved as $OUTPUT_FILE"
+            echo "Data saved as $OUTPUT_FILE"
         else
-            echo "❌ No FASTA file found for $SPECIES_NAME."
+            echo "No FASTA file found for $SPECIES_NAME."
         fi
 
         rm -rf "$TMP_DIR"
@@ -77,7 +77,7 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
 
     # Check if coordinates are valid
     if [[ ! "$START" =~ ^[0-9]+$ ]] || [[ ! "$END" =~ ^[0-9]+$ ]]; then
-        echo "⚠️  Invalid coordinates: $START-$END. Using RNA fallback..."
+        echo "Invalid coordinates: $START-$END. Using RNA fallback..."
         # ... (same fallback code as above)
         continue
     fi
@@ -97,14 +97,14 @@ while IFS= read -r SPECIES_NAME <&3 || [[ -n "$SPECIES_NAME" ]]; do
         REVERSE=0
     fi
 
-    echo "🌐 Downloading genomic sequence (${START}-${END})..."
+    echo " Downloading genomic sequence (${START}-${END})..."
     efetch -db nuccore -id "$CONTIG" -seq_start "$START" -seq_stop "$END" -format fasta > "$OUTPUT_FILE.tmp"
     
     # Apply reverse complement if needed
     if [ "$REVERSE" -eq 1 ]; then
         seqkit seq -r -p -t dna "$OUTPUT_FILE.tmp" > "$OUTPUT_FILE"
         rm "$OUTPUT_FILE.tmp"
-        echo "🔄 Reverse strand detected"
+        echo "Reverse strand detected"
     else
         mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
     fi

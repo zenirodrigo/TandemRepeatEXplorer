@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+'''
 Uso:
 ----
 python3 satDNA_similarity.py \
@@ -12,7 +12,7 @@ python3 satDNA_similarity.py \
     --mismatch -1 \
     --gap -2 \
     --min-len 1
-
+'''
 
 import argparse
 import math

@@ -1,666 +1,694 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
-Uso:
-----
-python3 satDNA_similarity.py \
-    --fasta sequences.fasta \
-    --out-prefix name_output \
-    --id 0.80 \
-    --cov 0.80 \
-    --match 2 \
-    --mismatch -1 \
-    --gap -2 \
-    --min-len 1
-'''
 
-import argparse
-import math
 import os
-import sys
+import time
 from collections import defaultdict
-from itertools import combinations
+from typing import List, Tuple, Dict
+
+try:
+    import readline
+    import glob
+
+    def _complete_path(text, state):
+        buf = readline.get_line_buffer()
+        token = buf.split()[-1] if buf.split() else ""
+        token = os.path.expanduser(token)
+        matches = glob.glob(token + "*")
+        matches = [m + ("/" if os.path.isdir(m) else "") for m in matches]
+        try:
+            return matches[state]
+        except IndexError:
+            return None
+
+    readline.set_completer_delims(" \t\n;")
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer(_complete_path)
+except Exception:
+    pass
+
+DNA_COMP = str.maketrans("ACGTNacgtn", "TGCANtgcan")
+VALID = set("ACGTN")
+
+FASTA_WRAP = 60
+
+MATCH_SCORE = 2
+MISMATCH_SCORE = -1
+GAP_SCORE = -2
+
+PROGRESS_EVERY_SEQS = 25
+PROGRESS_EVERY_ALNS = 200
+
+MAX_PROOFS_PER_FAMILY = 10
+ALIGN_WRAP = 120
+
+MAX_SUPERFAMS_PER_QUERY = 200
 
 
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+def clean_id(h: str) -> str:
+    return h.strip().split()[0]
 
 
-def reverse_complement(seq: str) -> str:
-    comp = str.maketrans("ACGTNacgtn", "TGCANtgcan")
-    return seq.translate(comp)[::-1]
+def clean_seq(s: str) -> str:
+    s = s.strip().upper().replace("U", "T")
+    return "".join(c for c in s if c in VALID)
 
 
-def clean_seq(seq: str) -> str:
-    seq = seq.strip().replace(" ", "").replace("\r", "").replace("\n", "")
-    seq = seq.upper()
-    allowed = set("ACGTN")
-    seq = "".join([b if b in allowed else "N" for b in seq])
-    return seq
-
-
-def read_fasta(path: str):
-    records = []
-    header = None
-    seq_chunks = []
-
-    with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.rstrip("\n")
+def read_fasta(path: str) -> List[Tuple[str, str]]:
+    rec = []
+    h = None
+    buf = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
             if not line:
                 continue
             if line.startswith(">"):
-                if header is not None:
-                    seq = clean_seq("".join(seq_chunks))
-                    records.append((header, seq))
-                header = line[1:].strip().split()[0]
-                seq_chunks = []
+                if h is not None:
+                    rec.append((clean_id(h), clean_seq("".join(buf))))
+                h = line[1:]
+                buf = []
             else:
-                seq_chunks.append(line.strip())
-
-    if header is not None:
-        seq = clean_seq("".join(seq_chunks))
-        records.append((header, seq))
-
-    return records
+                buf.append(line)
+        if h is not None:
+            rec.append((clean_id(h), clean_seq("".join(buf))))
+    rec = [(i, s) for i, s in rec if s]
+    return rec
 
 
-def write_fasta(records, out_path, width=80):
-    with open(out_path, "w", encoding="utf-8") as out:
-        for rid, seq in records:
-            out.write(f">{rid}\n")
-            for i in range(0, len(seq), width):
-                out.write(seq[i:i+width] + "\n")
+def write_fasta(path: str, records: List[Tuple[str, str]]) -> None:
+    with open(path, "w", encoding="utf-8") as out:
+        for hid, seq in records:
+            out.write(f">{hid}\n")
+            for i in range(0, len(seq), FASTA_WRAP):
+                out.write(seq[i:i + FASTA_WRAP] + "\n")
+
+
+def revcomp(seq: str) -> str:
+    return seq.translate(DNA_COMP)[::-1]
+
+
+# --- canonical k-mers to make prefilter RC-aware ---
+def revcomp_kmer(km: str) -> str:
+    return km.translate(DNA_COMP)[::-1]
+
+
+def canonical_kmer(km: str) -> str:
+    rc = revcomp_kmer(km)
+    return km if km <= rc else rc
+# ------------------------------------------------------
 
 
 class UnionFind:
-    def __init__(self, items):
-        self.parent = {x: x for x in items}
-        self.rank = {x: 0 for x in items}
+    def __init__(self, n: int):
+        self.parent = list(range(n))
 
-    def find(self, x):
-        p = self.parent[x]
-        if p != x:
-            self.parent[x] = self.find(p)
-        return self.parent[x]
+    def find(self, x: int) -> int:
+        while self.parent[x] != x:
+            self.parent[x] = self.parent[self.parent[x]]
+            x = self.parent[x]
+        return x
 
-    def union(self, a, b):
-        ra = self.find(a)
-        rb = self.find(b)
+    def union(self, a: int, b: int) -> bool:
+        ra, rb = self.find(a), self.find(b)
         if ra == rb:
             return False
-
-        if self.rank[ra] < self.rank[rb]:
-            self.parent[ra] = rb
-        elif self.rank[ra] > self.rank[rb]:
-            self.parent[rb] = ra
-        else:
-            self.parent[rb] = ra
-            self.rank[ra] += 1
+        self.parent[rb] = ra
         return True
 
 
+def choose_k_and_min_shared(seq_len: int) -> Tuple[int, int]:
+    if seq_len >= 5000:
+        return 13, 6
+    if seq_len >= 2000:
+        return 11, 5
+    if seq_len >= 800:
+        return 9, 4
+    return 6, 3
 
-def smith_waterman_local(query, target, match_score=2, mismatch_score=-1, gap_score=-2):
+
+def circular_kmers_set(seq: str, k: int) -> set:
     """
-    Retorna o melhor alinhamento local entre query e target.
-
-    Saída:
-    {
-        'score': int,
-        'aligned_query': str,
-        'aligned_target': str,
-        'q_start': int,  # 0-based inclusive no original query
-        'q_end': int,    # 0-based exclusive no original query
-        't_start': int,  # 0-based inclusive no original target
-        't_end': int     # 0-based exclusive no original target
-    }
+    RC-aware circular k-mers:
+    we index canonical(kmer) = min(kmer, RC(kmer))
+    so reverse-complement matches are discoverable in the prefilter.
     """
-    n = len(query)
-    m = len(target)
+    n = len(seq)
+    if n < k:
+        return set()
+    s2 = seq + seq
+    out = set()
+    for i in range(0, n):
+        km = s2[i:i + k]
+        out.add(canonical_kmer(km))
+    return out
 
-    H = [[0] * (m + 1) for _ in range(n + 1)]
-    TB = [[0] * (m + 1) for _ in range(n + 1)]  # 0 stop, 1 diag, 2 up, 3 left
 
-    best_score = 0
-    best_pos = (0, 0)
+def semiglobal_identity_only(A: str, B2: str) -> float:
+    """
+    Fast semiglobal alignment of A against B+B (or RC(B)+RC(B)).
+
+    IMPORTANT CHANGE:
+    Identity is NOT computed as matches / alignment_length anymore.
+    It is now computed as:
+
+        matches / max(len(A), len(B_real))
+
+    where B_real is the real monomer length, not len(B+B).
+
+    This preserves the original fast circular phase search, but prevents
+    short monomers from matching partially inside longer monomers and
+    getting inflated identities.
+    """
+    n = len(A)
+    m = len(B2)
+    real_b_len = m // 2
+
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    tb = [[0] * (m + 1) for _ in range(n + 1)]
 
     for i in range(1, n + 1):
-        qi = query[i - 1]
+        dp[i][0] = dp[i - 1][0] + GAP_SCORE
+        tb[i][0] = 2
+
+    for j in range(1, m + 1):
+        dp[0][j] = 0
+        tb[0][j] = 3
+
+    for i in range(1, n + 1):
+        ai = A[i - 1]
+        row = dp[i]
+        row_tb = tb[i]
+        prev = dp[i - 1]
         for j in range(1, m + 1):
-            tj = target[j - 1]
-            diag = H[i - 1][j - 1] + (match_score if qi == tj else mismatch_score)
-            up = H[i - 1][j] + gap_score
-            left = H[i][j - 1] + gap_score
-            best = max(0, diag, up, left)
+            bj = B2[j - 1]
+            diag = prev[j - 1] + (MATCH_SCORE if ai == bj else MISMATCH_SCORE)
+            up = prev[j] + GAP_SCORE
+            left = row[j - 1] + GAP_SCORE
 
-            H[i][j] = best
-            if best == 0:
-                TB[i][j] = 0
-            elif best == diag:
-                TB[i][j] = 1
-            elif best == up:
-                TB[i][j] = 2
-            else:
-                TB[i][j] = 3
+            best = diag
+            move = 1
+            if up > best:
+                best = up
+                move = 2
+            if left > best:
+                best = left
+                move = 3
 
-            if best > best_score:
-                best_score = best
-                best_pos = (i, j)
+            row[j] = best
+            row_tb[j] = move
 
-    i, j = best_pos
-    q_end = i
-    t_end = j
+    best_j = max(range(m + 1), key=lambda j: dp[n][j])
 
-    aln_q = []
-    aln_t = []
+    i, j = n, best_j
+    matches = 0
 
-    while i > 0 and j > 0 and H[i][j] > 0:
-        move = TB[i][j]
+    while i > 0:
+        move = tb[i][j]
         if move == 1:
-            aln_q.append(query[i - 1])
-            aln_t.append(target[j - 1])
+            if A[i - 1] == B2[j - 1]:
+                matches += 1
             i -= 1
             j -= 1
         elif move == 2:
-            aln_q.append(query[i - 1])
-            aln_t.append("-")
             i -= 1
-        elif move == 3:
-            aln_q.append("-")
-            aln_t.append(target[j - 1])
+        else:
             j -= 1
-        else:
-            break
 
-    q_start = i
-    t_start = j
-
-    aln_q.reverse()
-    aln_t.reverse()
-
-    return {
-        "score": best_score,
-        "aligned_query": "".join(aln_q),
-        "aligned_target": "".join(aln_t),
-        "q_start": q_start,
-        "q_end": q_end,
-        "t_start": t_start,
-        "t_end": t_end,
-    }
+    denom = max(len(A), real_b_len)
+    return matches / denom if denom > 0 else 0.0
 
 
-def compute_alignment_stats(aln_q: str, aln_t: str, len_a: int, len_b: int):
+def semiglobal_alignment(A: str, B2: str) -> Tuple[float, str, str]:
     """
-    Calcula métricas do alinhamento usando normalização pelo maior comprimento.
+    Returns identity + explicit alignment for A against B+B (or RC(B)+RC(B)).
+
+    IMPORTANT CHANGE:
+    Identity is computed as:
+
+        matches / max(len(A), len(B_real))
+
+    and not matches / alignment_length.
+
+    This keeps the output format intact while fixing the inflated identity issue.
     """
+    n = len(A)
+    m = len(B2)
+    real_b_len = m // 2
+
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    tb = [[0] * (m + 1) for _ in range(n + 1)]
+
+    for i in range(1, n + 1):
+        dp[i][0] = dp[i - 1][0] + GAP_SCORE
+        tb[i][0] = 2
+    for j in range(1, m + 1):
+        dp[0][j] = 0
+        tb[0][j] = 3
+
+    for i in range(1, n + 1):
+        ai = A[i - 1]
+        row = dp[i]
+        row_tb = tb[i]
+        prev = dp[i - 1]
+        for j in range(1, m + 1):
+            bj = B2[j - 1]
+            diag = prev[j - 1] + (MATCH_SCORE if ai == bj else MISMATCH_SCORE)
+            up = prev[j] + GAP_SCORE
+            left = row[j - 1] + GAP_SCORE
+
+            best = diag
+            move = 1
+            if up > best:
+                best = up
+                move = 2
+            if left > best:
+                best = left
+                move = 3
+
+            row[j] = best
+            row_tb[j] = move
+
+    best_j = max(range(m + 1), key=lambda j: dp[n][j])
+
+    i, j = n, best_j
+    alnA = []
+    alnB = []
     matches = 0
-    mismatches = 0
-    gap_cols = 0
-    aligned_a = 0
-    aligned_b = 0
 
-    for ca, cb in zip(aln_q, aln_t):
-        if ca != "-":
-            aligned_a += 1
-        if cb != "-":
-            aligned_b += 1
-
-        if ca == "-" or cb == "-":
-            gap_cols += 1
-        elif ca == cb:
-            matches += 1
+    while i > 0:
+        move = tb[i][j]
+        if move == 1:
+            a = A[i - 1]
+            b = B2[j - 1]
+            alnA.append(a)
+            alnB.append(b)
+            if a == b:
+                matches += 1
+            i -= 1
+            j -= 1
+        elif move == 2:
+            alnA.append(A[i - 1])
+            alnB.append("-")
+            i -= 1
         else:
-            mismatches += 1
+            alnA.append("-")
+            alnB.append(B2[j - 1])
+            j -= 1
 
-    max_len = max(len_a, len_b)
-    min_aligned = min(aligned_a, aligned_b)
+    alnA = "".join(reversed(alnA))
+    alnB = "".join(reversed(alnB))
 
-    normalized_identity = matches / max_len if max_len > 0 else 0.0
-    coverage = min_aligned / max_len if max_len > 0 else 0.0
+    denom = max(len(A), real_b_len)
+    identity = matches / denom if denom > 0 else 0.0
 
-    aligned_columns = len(aln_q)
-
-    return {
-        "matches": matches,
-        "mismatches": mismatches,
-        "gap_cols": gap_cols,
-        "aligned_a": aligned_a,
-        "aligned_b": aligned_b,
-        "aligned_columns": aligned_columns,
-        "normalized_identity": normalized_identity,
-        "coverage": coverage,
-    }
+    return identity, alnA, alnB
 
 
-def pretty_midline(aln_q: str, aln_t: str) -> str:
-    chars = []
-    for a, b in zip(aln_q, aln_t):
-        if a == b and a != "-":
-            chars.append("|")
+def best_direction_identity(A: str, B: str) -> Tuple[float, str]:
+    id_fwd = semiglobal_identity_only(A, B + B)
+    rcB = revcomp(B)
+    id_rc = semiglobal_identity_only(A, rcB + rcB)
+    if id_fwd >= id_rc:
+        return id_fwd, "forward"
+    return id_rc, "reverse-complement"
+
+
+def best_direction_alignment(A: str, B: str) -> Tuple[float, str, str, str]:
+    id_fwd, a1, b1 = semiglobal_alignment(A, B + B)
+    rcB = revcomp(B)
+    id_rc, a2, b2 = semiglobal_alignment(A, rcB + rcB)
+    if id_fwd >= id_rc:
+        return id_fwd, "forward", a1, b1
+    return id_rc, "reverse-complement", a2, b2
+
+
+def reciprocal_identity_only(A: str, B: str) -> Tuple[float, float, str, float, str]:
+    id1, rel1 = best_direction_identity(A, B)
+    id2, rel2 = best_direction_identity(B, A)
+    id_min = id1 if id1 <= id2 else id2
+    return id_min, id1, rel1, id2, rel2
+
+
+def pretty_alignment(alnA: str, alnB: str) -> str:
+    mid = []
+    for a, b in zip(alnA, alnB):
+        if a != "-" and b != "-" and a == b:
+            mid.append("|")
         else:
-            chars.append(" ")
-    return "".join(chars)
+            mid.append(" ")
+    mid = "".join(mid)
+
+    out = []
+    for i in range(0, len(alnA), ALIGN_WRAP):
+        out.append("A: " + alnA[i:i + ALIGN_WRAP])
+        out.append("   " + mid[i:i + ALIGN_WRAP])
+        out.append("B: " + alnB[i:i + ALIGN_WRAP])
+        out.append("")
+    return "\n".join(out).rstrip()
 
 
+def ask_user() -> Tuple[str, float]:
+    print("\n=== satDNA Similarity Clustering ===")
+    print("This program groups satellite DNA monomers into families based on")
+    print("circular sequence similarity, allowing reverse-complement and gaps.\n")
+    print("Tip: use TAB to autocomplete file paths.\n")
 
-def circular_local_best(query, target, match_score=2, mismatch_score=-1, gap_score=-2):
-    """
-    Busca o melhor alinhamento local de query contra target circular.
-    Testa:
-      - target forward
-      - target reverse-complement
-    usando target duplicado para permitir wrap-around.
+    fasta = input("Input FASTA file with monomer sequences: ").strip()
+    fasta = os.path.expanduser(fasta)
 
-    A melhor solução é escolhida por:
-      1) maior score
-      2) maior normalized_identity
-      3) maior coverage
+    identity = float(input(
+        "Minimum identity threshold (e.g. 0.80 = 80% similarity) [0.80]: "
+    ).strip() or "0.80")
 
-    Restringimos o trecho real usado no target a no máximo len(target),
-    para evitar alinhar mais de uma volta inteira.
-    """
-    candidates = [
-        ("forward", target),
-        ("reverse-complement", reverse_complement(target)),
-    ]
-
-    best = None
-    tlen = len(target)
-
-    for orient, tgt in candidates:
-        doubled = tgt + tgt
-        result = smith_waterman_local(
-            query=query,
-            target=doubled,
-            match_score=match_score,
-            mismatch_score=mismatch_score,
-            gap_score=gap_score,
-        )
-
-        aln_q = result["aligned_query"]
-        aln_t = result["aligned_target"]
-
-        stats = compute_alignment_stats(aln_q, aln_t, len(query), len(target))
-
-        # checagem do span real sobre o target duplicado
-        t_start = result["t_start"]
-        t_end = result["t_end"]
-        raw_span = t_end - t_start
-
-        # Se o span passa de uma volta, descartamos.
-        # Isso evita "colar" mais de uma cópia do target duplicado.
-        if raw_span > tlen:
-            continue
-
-        item = {
-            "orientation": orient,
-            "score": result["score"],
-            "aligned_query": aln_q,
-            "aligned_target": aln_t,
-            "q_start": result["q_start"],
-            "q_end": result["q_end"],
-            "t_start_doubled": t_start,
-            "t_end_doubled": t_end,
-            "t_start_circular": t_start % tlen if tlen > 0 else 0,
-            "t_end_circular": t_end % tlen if tlen > 0 else 0,
-            "stats": stats,
-        }
-
-        if best is None:
-            best = item
-        else:
-            bstats = best["stats"]
-            if (
-                item["score"] > best["score"]
-                or (item["score"] == best["score"] and item["stats"]["normalized_identity"] > bstats["normalized_identity"])
-                or (
-                    item["score"] == best["score"]
-                    and math.isclose(item["stats"]["normalized_identity"], bstats["normalized_identity"])
-                    and item["stats"]["coverage"] > bstats["coverage"]
-                )
-            ):
-                best = item
-
-    if best is None:
-        # fallback impossível na prática se houver bases válidas,
-        # mas deixamos por segurança
-        best = {
-            "orientation": "forward",
-            "score": 0,
-            "aligned_query": "",
-            "aligned_target": "",
-            "q_start": 0,
-            "q_end": 0,
-            "t_start_doubled": 0,
-            "t_end_doubled": 0,
-            "t_start_circular": 0,
-            "t_end_circular": 0,
-            "stats": {
-                "matches": 0,
-                "mismatches": 0,
-                "gap_cols": 0,
-                "aligned_a": 0,
-                "aligned_b": 0,
-                "aligned_columns": 0,
-                "normalized_identity": 0.0,
-                "coverage": 0.0,
-            },
-        }
-
-    return best
+    return fasta, identity
 
 
-def reciprocal_pair_metrics(seq_a, seq_b, match_score=2, mismatch_score=-1, gap_score=-2):
-    """
-    Calcula:
-      A -> B circular
-      B -> A circular
+def run(fasta: str, identity_threshold: float) -> None:
+    t0 = time.time()
+    records = read_fasta(fasta)
+    if not records:
+        raise SystemExit(f"ERROR: No sequences found in {fasta}")
 
-    E define:
-      reciprocal_identity = min(identity_A_to_B, identity_B_to_A)
-      reciprocal_coverage = min(coverage_A_to_B, coverage_B_to_A)
-    """
-    a_to_b = circular_local_best(
-        query=seq_a,
-        target=seq_b,
-        match_score=match_score,
-        mismatch_score=mismatch_score,
-        gap_score=gap_score,
-    )
+    ids = [r[0] for r in records]
+    seqs = [r[1] for r in records]
+    lens = [len(s) for s in seqs]
+    n = len(seqs)
 
-    b_to_a = circular_local_best(
-        query=seq_b,
-        target=seq_a,
-        match_score=match_score,
-        mismatch_score=mismatch_score,
-        gap_score=gap_score,
-    )
+    min_len = min(lens)
+    max_len = max(lens)
+    med_len = sorted(lens)[n // 2]
 
-    rid = min(a_to_b["stats"]["normalized_identity"], b_to_a["stats"]["normalized_identity"])
-    rcov = min(a_to_b["stats"]["coverage"], b_to_a["stats"]["coverage"])
+    print(f"\nLoaded {n} sequences.")
+    print(f"Length stats (bp): min={min_len} median={med_len} max={max_len}")
+    print("Building k-mer index...")
 
-    return {
-        "a_to_b": a_to_b,
-        "b_to_a": b_to_a,
-        "reciprocal_identity": rid,
-        "reciprocal_coverage": rcov,
-    }
+    K, MIN_SHARED = choose_k_and_min_shared(med_len)
+    MAX_CANDIDATES_PER_SEQ = 3000
 
+    print(f"Internal prefilter: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
+    print("Clustering + detecting superfamilies...")
 
+    uf = UnionFind(n)
 
-def choose_family_representative(member_ids, seq_dict):
-    """
-    Escolhe o representante da família.
-    Regra:
-      1) maior comprimento
-      2) em empate, ordem alfabética do ID
-    """
-    return sorted(member_ids, key=lambda x: (-len(seq_dict[x]), x))[0]
+    inv: Dict[str, List[int]] = defaultdict(list)
+    kmers_by_i: List[set] = [set() for _ in range(n)]
 
+    for i, s in enumerate(seqs):
+        kmset = circular_kmers_set(s, K)
+        kmers_by_i[i] = kmset
+        for km in kmset:
+            inv[km].append(i)
 
+    compared_candidates = 0
+    alignments_done = 0
+    unions = 0
 
-def write_families_tsv(families, seq_dict, out_tsv):
-    with open(out_tsv, "w", encoding="utf-8") as out:
-        out.write("Family\tMemberID\tLength\n")
-        for fam_name, members in families:
-            for mid in members:
-                out.write(f"{fam_name}\t{mid}\t{len(seq_dict[mid])}\n")
+    proof_edges = []
+    superfamily_hits = []
 
+    for i in range(n):
+        if i % PROGRESS_EVERY_SEQS == 0 and i > 0:
+            dt = time.time() - t0
+            print(f"Progress: {i}/{n} | alignments={alignments_done} | unions={unions} | elapsed={dt:.1f}s")
 
-def write_pairwise_tsv(pair_rows, out_tsv):
-    with open(out_tsv, "w", encoding="utf-8") as out:
-        out.write(
-            "SeqA\tLenA\tSeqB\tLenB\t"
-            "A_to_B_identity\tA_to_B_coverage\tA_to_B_orientation\t"
-            "B_to_A_identity\tB_to_A_coverage\tB_to_A_orientation\t"
-            "ReciprocalIdentity\tReciprocalCoverage\tPass\n"
-        )
-        for r in pair_rows:
-            out.write(
-                f"{r['id_a']}\t{r['len_a']}\t{r['id_b']}\t{r['len_b']}\t"
-                f"{r['a_to_b_identity']:.4f}\t{r['a_to_b_coverage']:.4f}\t{r['a_to_b_orientation']}\t"
-                f"{r['b_to_a_identity']:.4f}\t{r['b_to_a_coverage']:.4f}\t{r['b_to_a_orientation']}\t"
-                f"{r['reciprocal_identity']:.4f}\t{r['reciprocal_coverage']:.4f}\t"
-                f"{'YES' if r['passed'] else 'NO'}\n"
-            )
+        counts = defaultdict(int)
+        for km in kmers_by_i[i]:
+            for j in inv.get(km, []):
+                if j <= i:
+                    continue
+                counts[j] += 1
 
+        candidates = [(j, c) for j, c in counts.items() if c >= MIN_SHARED]
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        if len(candidates) > MAX_CANDIDATES_PER_SEQ:
+            candidates = candidates[:MAX_CANDIDATES_PER_SEQ]
+        superfams_for_i = 0
 
-def write_proof_report(
-    out_path,
-    families,
-    seq_dict,
-    used_edges,
-    pair_metrics_map,
-    args,
-    total_pairs_evaluated,
-    total_unions,
-):
-    with open(out_path, "w", encoding="utf-8") as out:
-        out.write("# satDNA_similarity.py proof report\n")
-        out.write("# Families: circular local alignment with normalized identity + coverage filter.\n")
-        out.write(f"# Identity threshold (family): {args.id}\n")
-        out.write(f"# Coverage threshold (family): {args.cov}\n")
-        out.write(f"# Scoring: match={args.match}, mismatch={args.mismatch}, gap={args.gap}\n")
-        out.write("\n")
-        out.write(
-            f"# Stats: sequences={len(seq_dict)}, families={len(families)}, "
-            f"pairwise_comparisons={total_pairs_evaluated}, unions={total_unions}\n"
-        )
-        out.write("\n")
+        for j, shared in candidates:
+            compared_candidates += 1
 
-        for fam_name, members in families:
-            out.write("=" * 100 + "\n")
-            out.write(f"FAMILY: {fam_name}\n")
-            out.write(f"Family size: {len(members)}\n")
-            out.write("Members (id\tlength):\n")
-            for mid in members:
-                out.write(f"  {mid}\t{len(seq_dict[mid])}\n")
-            out.write("\n")
+            id_min, id_i_to_j, rel_i_to_j, id_j_to_i, rel_j_to_i = reciprocal_identity_only(seqs[i], seqs[j])
+            alignments_done += 1
 
-            fam_edges = []
-            mset = set(members)
-            for a, b in used_edges:
-                if a in mset and b in mset:
-                    fam_edges.append((a, b))
+            if alignments_done % PROGRESS_EVERY_ALNS == 0:
+                dt = time.time() - t0
+                print(f"  Alignments computed: {alignments_done} | elapsed={dt:.1f}s")
 
-            if not fam_edges:
-                out.write("No stored union-edge proofs for this family (singleton or no union edges stored).\n\n")
+            if id_min + 1e-12 >= identity_threshold:
+                if uf.find(i) == uf.find(j):
+                    continue
+
+                if uf.union(i, j):
+                    unions += 1
+
+                    id_ab, rel_ab, alnA_ab, alnB_ab = best_direction_alignment(seqs[i], seqs[j])
+                    id_ba, rel_ba, alnA_ba, alnB_ba = best_direction_alignment(seqs[j], seqs[i])
+
+                    proof_edges.append((
+                        i, j,
+                        {
+                            "id_min": id_min,
+                            "A_id": ids[i], "B_id": ids[j],
+                            "A_len": lens[i], "B_len": lens[j],
+                            "A_to_B": {"identity": id_ab, "relation": rel_ab, "alnA": alnA_ab, "alnB": alnB_ab},
+                            "B_to_A": {"identity": id_ba, "relation": rel_ba, "alnA": alnA_ba, "alnB": alnB_ba},
+                        }
+                    ))
                 continue
 
-            out.write("Proof alignments (union edges used to build the family):\n\n")
+            one_way_best = id_i_to_j if id_i_to_j >= id_j_to_i else id_j_to_i
+            if one_way_best + 1e-12 >= identity_threshold:
+                if superfams_for_i >= MAX_SUPERFAMS_PER_QUERY:
+                    continue
 
-            for a, b in fam_edges:
-                key = tuple(sorted((a, b)))
-                pm = pair_metrics_map[key]
+                if id_i_to_j >= id_j_to_i:
+                    query = i
+                    target = j
+                    rel = rel_i_to_j
+                    id_oneway = id_i_to_j
+                    direction = "A_in_B"
+                else:
+                    query = j
+                    target = i
+                    rel = rel_j_to_i
+                    id_oneway = id_j_to_i
+                    direction = "B_in_A"
 
-                out.write(f"[EDGE] {a} (len={len(seq_dict[a])})  <->  {b} (len={len(seq_dict[b])})\n")
-                out.write(f"  Reciprocal normalized identity: {pm['reciprocal_identity']:.4f}\n")
-                out.write(f"  Reciprocal coverage:            {pm['reciprocal_coverage']:.4f}\n")
-                out.write(
-                    f"  A→B identity = {pm['a_to_b']['stats']['normalized_identity']:.4f} "
-                    f"(coverage = {pm['a_to_b']['stats']['coverage']:.4f}, "
-                    f"orientation: {pm['a_to_b']['orientation']})\n"
-                )
-                out.write(
-                    f"  B→A identity = {pm['b_to_a']['stats']['normalized_identity']:.4f} "
-                    f"(coverage = {pm['b_to_a']['stats']['coverage']:.4f}, "
-                    f"orientation: {pm['b_to_a']['orientation']})\n"
-                )
+                superfamily_hits.append({
+                    "query_i": query,
+                    "target_i": target,
+                    "query_id": ids[query],
+                    "target_id": ids[target],
+                    "query_len": lens[query],
+                    "target_len": lens[target],
+                    "direction": direction,
+                    "best_orientation": rel,
+                    "identity_oneway": id_oneway,
+                    "identity_reciprocal_min": id_min,
+                    "shared_signals": shared,
+                })
+                superfams_for_i += 1
+
+    # Build families (final)
+    families = defaultdict(list)
+    for i in range(n):
+        families[uf.find(i)].append(i)
+
+    base = os.path.splitext(fasta)[0]
+    out_fasta = base + f".id{int(identity_threshold*100)}.family_reps.fasta"
+    out_tsv = base + f".id{int(identity_threshold*100)}.families.tsv"
+    out_report = base + f".id{int(identity_threshold*100)}.proof.txt"
+
+    out_super = base + f".id{int(identity_threshold*100)}.superfamilies.tsv"
+    out_super_groups = base + f".id{int(identity_threshold*100)}.superfamilies.groups.txt"
+
+    reps = []
+    member_to_rep: Dict[str, str] = {}
+    rep_to_size: Dict[str, int] = {}
+
+    with open(out_tsv, "w", encoding="utf-8") as tsv:
+        tsv.write("family_id\tfamily_size\trep_id\tmember_id\tmember_len\n")
+        for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
+            rep = min(members, key=lambda x: ids[x])
+            fam_id = ids[rep]
+            reps.append((fam_id, seqs[rep]))
+            rep_to_size[fam_id] = len(members)
+            for m in sorted(members, key=lambda x: ids[x]):
+                member_to_rep[ids[m]] = fam_id
+                tsv.write(f"{fam_id}\t{len(members)}\t{ids[rep]}\t{ids[m]}\t{lens[m]}\n")
+
+    write_fasta(out_fasta, reps)
+
+    with open(out_super, "w", encoding="utf-8") as out:
+        out.write(
+            "query_id\ttarget_id\tquery_len\ttarget_len\t"
+            "query_family\ttarget_family\tquery_family_size\ttarget_family_size\t"
+            "direction\tbest_orientation\tidentity_oneway\tidentity_reciprocal_min\tshared_signals\n"
+        )
+
+        superfamily_hits.sort(key=lambda d: (d["identity_oneway"], d["shared_signals"]), reverse=True)
+        for d in superfamily_hits:
+            qfam = member_to_rep.get(d["query_id"], d["query_id"])
+            tfam = member_to_rep.get(d["target_id"], d["target_id"])
+            out.write(
+                f"{d['query_id']}\t{d['target_id']}\t{d['query_len']}\t{d['target_len']}\t"
+                f"{qfam}\t{tfam}\t{rep_to_size.get(qfam, 1)}\t{rep_to_size.get(tfam, 1)}\t"
+                f"{d['direction']}\t{d['best_orientation']}\t{d['identity_oneway']:.4f}\t"
+                f"{d['identity_reciprocal_min']:.4f}\t{d['shared_signals']}\n"
+            )
+
+    fam_edges = defaultdict(list)
+    fam_adj = defaultdict(set)
+
+    for d in superfamily_hits:
+        qfam = member_to_rep.get(d["query_id"], d["query_id"])
+        tfam = member_to_rep.get(d["target_id"], d["target_id"])
+        if qfam == tfam:
+            continue
+
+        a, b = (qfam, tfam) if qfam <= tfam else (tfam, qfam)
+        fam_edges[(a, b)].append(d)
+        fam_adj[a].add(b)
+        fam_adj[b].add(a)
+
+    visited = set()
+    components = []
+
+    for node in sorted(fam_adj.keys()):
+        if node in visited:
+            continue
+        stack = [node]
+        visited.add(node)
+        comp = []
+        while stack:
+            x = stack.pop()
+            comp.append(x)
+            for y in fam_adj.get(x, set()):
+                if y not in visited:
+                    visited.add(y)
+                    stack.append(y)
+        components.append(sorted(comp))
+
+    with open(out_super_groups, "w", encoding="utf-8") as out:
+        out.write("# Superfamily groups (family-level connected components)\n")
+        out.write("# A group means: at least one member of family A has one-way >= threshold similarity to a member of family B,\n")
+        out.write("# but they did NOT merge as variants (reciprocal min < threshold).\n\n")
+        out.write(f"# Identity threshold: {identity_threshold}\n")
+        out.write(f"# Number of superfamily links (pair-level): {len(superfamily_hits)}\n")
+        out.write(f"# Number of family-level groups: {len(components)}\n\n")
+
+        if not components:
+            out.write("No superfamily groups detected.\n")
+        else:
+            group_id = 0
+            for comp in sorted(components, key=len, reverse=True):
+                group_id += 1
+                out.write("=" * 100 + "\n")
+                out.write(f"SuperfamilyGroup-{group_id} (families={len(comp)}):\n")
+                for fam in comp:
+                    out.write(f"  Family rep: {fam} (size={rep_to_size.get(fam, 1)})\n")
+                out.write("\nEvidence (top family links by best identity):\n")
+
+                evid_list = []
+                comp_set = set(comp)
+                for (a, b), evs in fam_edges.items():
+                    if a in comp_set and b in comp_set:
+                        best = max(evs, key=lambda e: (e["identity_oneway"], e["shared_signals"]))
+                        evid_list.append((a, b, best))
+
+                evid_list.sort(key=lambda x: (x[2]["identity_oneway"], x[2]["shared_signals"]), reverse=True)
+
+                max_pairs_to_print = 200
+                printed = 0
+                for a, b, best in evid_list:
+                    out.write(
+                        f"  {a}  <->  {b} | best one-way={best['identity_oneway']*100:.1f}% "
+                        f"(dir={best['direction']}, orient={best['best_orientation']}) | "
+                        f"e.g. {best['query_id']} -> {best['target_id']} | "
+                        f"len {best['query_len']} -> {best['target_len']}\n"
+                    )
+                    printed += 1
+                    if printed >= max_pairs_to_print:
+                        out.write(f"  (stopped after {max_pairs_to_print} family links)\n")
+                        break
                 out.write("\n")
 
-                out.write("  Alignment A→B:\n")
-                aq = pm["a_to_b"]["aligned_query"]
-                at = pm["a_to_b"]["aligned_target"]
-                mid = pretty_midline(aq, at)
-                out.write(f"A: {aq}\n")
-                out.write(f"   {mid}\n")
-                out.write(f"B: {at}\n\n")
+    edges_by_root = defaultdict(list)
+    for i, j, proof in proof_edges:
+        r = uf.find(i)
+        if uf.find(j) == r:
+            edges_by_root[r].append(proof)
 
-                out.write("  Alignment B→A:\n")
-                bq = pm["b_to_a"]["aligned_query"]
-                bt = pm["b_to_a"]["aligned_target"]
-                mid2 = pretty_midline(bq, bt)
-                out.write(f"A: {bq}\n")
-                out.write(f"   {mid2}\n")
-                out.write(f"B: {bt}\n\n")
+    report = []
+    report.append("# satDNA_similarity.py proof report")
+    report.append("# Families: reciprocal circular identity (forward/RC) with gaps included.")
+    report.append(f"# Identity threshold (family): {identity_threshold}")
+    report.append(f"# Prefilter: k={K}, min_shared_signals={MIN_SHARED}, max_candidates_per_seq={MAX_CANDIDATES_PER_SEQ}")
+    report.append(f"# Scoring: match={MATCH_SCORE}, mismatch={MISMATCH_SCORE}, gap={GAP_SCORE}")
+    report.append("")
+    report.append(f"# Stats: sequences={n}, families={len(families)}, candidate_pairs={compared_candidates}, alignments={alignments_done}, unions={unions}")
+    report.append(f"# Superfamily links written to: {out_super}")
+    report.append(f"# Superfamily groups written to: {out_super_groups}")
+    report.append("")
 
+    for root, members in sorted(families.items(), key=lambda x: len(x[1]), reverse=True):
+        rep = min(members, key=lambda x: ids[x])
+        fam_id = ids[rep]
+        report.append("=" * 100)
+        report.append(f"FAMILY: {fam_id}")
+        report.append(f"Family size: {len(members)}")
+        report.append("Members (id\tlength):")
+        for m in sorted(members, key=lambda x: ids[x]):
+            report.append(f"  {ids[m]}\t{lens[m]}")
+        report.append("")
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Agrupamento de satDNAs por similaridade circular com identidade normalizada e cobertura."
-    )
-    parser.add_argument("--fasta", required=True, help="FASTA de entrada")
-    parser.add_argument("--out-prefix", required=True, help="Prefixo de saída")
-    parser.add_argument("--id", type=float, default=0.80, help="Cutoff mínimo de identidade recíproca normalizada")
-    parser.add_argument("--cov", type=float, default=0.80, help="Cutoff mínimo de cobertura recíproca")
-    parser.add_argument("--match", type=int, default=2, help="Score de match")
-    parser.add_argument("--mismatch", type=int, default=-1, help="Penalty de mismatch")
-    parser.add_argument("--gap", type=int, default=-2, help="Penalty de gap")
-    parser.add_argument("--min-len", type=int, default=1, help="Comprimento mínimo para manter sequência")
-    return parser.parse_args()
-
-
-def main():
-    args = parse_args()
-
-    if not os.path.exists(args.fasta):
-        eprint(f"ERRO: arquivo FASTA não encontrado: {args.fasta}")
-        sys.exit(1)
-
-    if not (0.0 <= args.id <= 1.0):
-        eprint("ERRO: --id deve estar entre 0 e 1.")
-        sys.exit(1)
-
-    if not (0.0 <= args.cov <= 1.0):
-        eprint("ERRO: --cov deve estar entre 0 e 1.")
-        sys.exit(1)
-
-    records = read_fasta(args.fasta)
-    if not records:
-        eprint("ERRO: FASTA vazio ou inválido.")
-        sys.exit(1)
-
-    seq_dict = {}
-    for rid, seq in records:
-        if len(seq) < args.min_len:
+        proofs = edges_by_root.get(root, [])
+        if not proofs:
+            report.append("No stored union-edge proofs for this family (singleton or no union edges stored).")
+            report.append("")
             continue
-        if rid in seq_dict:
-            eprint(f"ERRO: ID duplicado no FASTA: {rid}")
-            sys.exit(1)
-        seq_dict[rid] = seq
 
-    if not seq_dict:
-        eprint("ERRO: nenhuma sequência restante após filtro --min-len.")
-        sys.exit(1)
+        report.append("Proof alignments (union edges used to build the family):")
+        report.append("")
 
-    ids = sorted(seq_dict.keys())
-    uf = UnionFind(ids)
+        printed = 0
+        for p in proofs:
+            report.append(f"[EDGE] {p['A_id']} (len={p['A_len']})  <->  {p['B_id']} (len={p['B_len']})")
+            report.append(f"  Reciprocal identity (min of both directions): {p['id_min']:.4f}")
+            report.append(f"  A→B best identity = {p['A_to_B']['identity']:.4f} (orientation: {p['A_to_B']['relation']})")
+            report.append(f"  B→A best identity = {p['B_to_A']['identity']:.4f} (orientation: {p['B_to_A']['relation']})")
+            report.append("")
+            report.append("  Alignment A→B:")
+            report.append(pretty_alignment(p["A_to_B"]["alnA"], p["A_to_B"]["alnB"]))
+            report.append("")
+            report.append("  Alignment B→A:")
+            report.append(pretty_alignment(p["B_to_A"]["alnA"], p["B_to_A"]["alnB"]))
+            report.append("")
+            printed += 1
+            if printed >= MAX_PROOFS_PER_FAMILY:
+                report.append(f"(Stopped after {MAX_PROOFS_PER_FAMILY} proofs for this family.)")
+                report.append("")
+                break
 
-    total_pairs_evaluated = 0
-    total_unions = 0
+    with open(out_report, "w", encoding="utf-8") as out:
+        out.write("\n".join(report) + "\n")
 
-    pair_metrics_map = {}
-    used_edges = []
-    pair_rows = []
-
-    eprint(f"[INFO] Sequências válidas: {len(ids)}")
-    eprint("[INFO] Iniciando comparações par-a-par...")
-
-    for idx, (id_a, id_b) in enumerate(combinations(ids, 2), start=1):
-        seq_a = seq_dict[id_a]
-        seq_b = seq_dict[id_b]
-
-        total_pairs_evaluated += 1
-
-        pm = reciprocal_pair_metrics(
-            seq_a=seq_a,
-            seq_b=seq_b,
-            match_score=args.match,
-            mismatch_score=args.mismatch,
-            gap_score=args.gap,
-        )
-
-        key = tuple(sorted((id_a, id_b)))
-        pair_metrics_map[key] = pm
-
-        passed = (
-            pm["reciprocal_identity"] >= args.id
-            and pm["reciprocal_coverage"] >= args.cov
-        )
-
-        if passed:
-            changed = uf.union(id_a, id_b)
-            if changed:
-                used_edges.append((id_a, id_b))
-                total_unions += 1
-
-        pair_rows.append({
-            "id_a": id_a,
-            "len_a": len(seq_a),
-            "id_b": id_b,
-            "len_b": len(seq_b),
-            "a_to_b_identity": pm["a_to_b"]["stats"]["normalized_identity"],
-            "a_to_b_coverage": pm["a_to_b"]["stats"]["coverage"],
-            "a_to_b_orientation": pm["a_to_b"]["orientation"],
-            "b_to_a_identity": pm["b_to_a"]["stats"]["normalized_identity"],
-            "b_to_a_coverage": pm["b_to_a"]["stats"]["coverage"],
-            "b_to_a_orientation": pm["b_to_a"]["orientation"],
-            "reciprocal_identity": pm["reciprocal_identity"],
-            "reciprocal_coverage": pm["reciprocal_coverage"],
-            "passed": passed,
-        })
-
-        if idx % 100 == 0:
-            eprint(f"[INFO] Comparações concluídas: {idx}")
-
-    fam_map = defaultdict(list)
-    for sid in ids:
-        fam_map[uf.find(sid)].append(sid)
-
-    families = []
-    fam_counter = 1
-
-    for root, members in sorted(fam_map.items(), key=lambda x: (-len(x[1]), sorted(x[1])[0])):
-        members = sorted(members)
-        rep = choose_family_representative(members, seq_dict)
-        fam_name = rep
-        families.append((fam_name, members))
-        fam_counter += 1
-
-    out_families_tsv = args.out_prefix + ".families.tsv"
-    out_reps_fasta = args.out_prefix + ".family_reps.fasta"
-    out_proof = args.out_prefix + ".proof.txt"
-    out_pairwise = args.out_prefix + ".pairwise.tsv"
-
-    write_families_tsv(families, seq_dict, out_families_tsv)
-
-    rep_records = []
-    for fam_name, members in families:
-        rep = choose_family_representative(members, seq_dict)
-        rep_records.append((fam_name, seq_dict[rep]))
-    write_fasta(rep_records, out_reps_fasta)
-
-    write_pairwise_tsv(pair_rows, out_pairwise)
-
-    write_proof_report(
-        out_path=out_proof,
-        families=families,
-        seq_dict=seq_dict,
-        used_edges=used_edges,
-        pair_metrics_map=pair_metrics_map,
-        args=args,
-        total_pairs_evaluated=total_pairs_evaluated,
-        total_unions=total_unions,
-    )
-
-    eprint("[INFO] Finalizado.")
-    eprint(f"[INFO] Families TSV:      {out_families_tsv}")
-    eprint(f"[INFO] Family reps FASTA: {out_reps_fasta}")
-    eprint(f"[INFO] Proof report:      {out_proof}")
-    eprint(f"[INFO] Pairwise TSV:      {out_pairwise}")
+    dt = time.time() - t0
+    print("\nDONE")
+    print(f"Total time: {dt:.1f}s")
+    print(f"Sequences: {n}")
+    print(f"Families:  {len(families)}")
+    print(f"Candidate pairs evaluated: {compared_candidates}")
+    print(f"Alignments computed:       {alignments_done}")
+    print(f"Unions (family links):     {unions}")
+    print(f"FASTA reps:  {out_fasta}")
+    print(f"TSV:         {out_tsv}")
+    print(f"REPORT:      {out_report}")
+    print(f"SUPERFAMS:   {out_super}")
+    print(f"SF_GROUPS:   {out_super_groups}")
 
 
 if __name__ == "__main__":
-    main()
+    fasta, identity = ask_user()
+    run(fasta, identity)

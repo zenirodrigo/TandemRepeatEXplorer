@@ -18,7 +18,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 - **gene_extractor.sh** – Automates the retrieval and extraction of the genomic sequence of a specific gene across multiple species using NCBI tools.
 
 ---
-## 📚 Table of Contents
+## Table of Contents
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
 - [satDNA_density.sh](#satdna_densitysh--circos-like-satellitome-density-plot)
 - [satDNA_similarity.py](#satdna_similaritypy--automated-alignment-of-satellite-dna-monomers-for-variant-and-superfamily-analysis)
@@ -35,17 +35,17 @@ cd T-REx
 conda env create -f environment.yml
 conda activate trex_env
 
-#Alternatively, advanced users may install dependencies manually.
+#Alternatively, if you will use only one tool, you can install dependencies manually.
 
 ```
 
 ## arrayScope.sh – Genome Repeat Analysis Pipeline
 
-### 📜 Description
+### Description
 **ArrayScope** is a **Bash + Python** pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.  
 It processes multiple genomes and reference monomers, runs **[BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)**, merges nearby repeat regions (< 2000 bp apart), and generates high-quality plots for chromosome-scale visualization.
 
-> 💡 For variants in reference files — e.g., two slightly different monomers or the same repeat from different species, include an underscore `_` in the filename.
+> For variants in reference files — e.g., two slightly different monomers or the same repeat from different species, include an underscore `_` in the filename.
 
 ###  Features
 - Processes **multiple genome assemblies** and reference monomer files
@@ -77,11 +77,11 @@ conda install -c conda-forge parallel
 pip install biopython pandas matplotlib seaborn
 ```
 
-### 📂 Input Files
+### Input Files
 1. Genome assemblies (FASTA format)
 2. Reference monomers (FASTA format)
 
-### 📂 Output Files
+### Output Files
 - `valid_monomers.bed`
 - `chromosomes_with_annotations.png`
 - `array_frequency_heatmap.png`
@@ -104,7 +104,7 @@ bash arrayScope.sh
 
 ## satDNA_density.sh – Circos-like satellitome density plot
 
-### 📜 Description
+### Description
 **satDNA_density.sh** is a **Bash + Python** module for generating a **circos-like** overview of satDNA distributions across chromosomes/contigs from a genome assembly.
 
 It runs **BLASTn** searches of satDNA references against a genome FASTA, merges nearby hits (≤ 2000 bp), and produces a circular plot with:
@@ -136,7 +136,7 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
   - `pandas`
   - `matplotlib`
 
-### 📂 Inputs
+### Inputs
 1. Genome FASTA file(s) (space-separated)
 2. Number of chromosome sequences (contigs) to use from each genome FASTA
 3. Reference FASTA file(s) (satDNA monomers OR a satellitome multi-FASTA)
@@ -144,7 +144,7 @@ It runs **BLASTn** searches of satDNA references against a genome FASTA, merges 
 5. Number of parallel jobs
 6. Top-10 selection mode (FASTA order or abundance)
 
-### 📂 Outputs (per genome)
+### Outputs (per genome)
 Inside a folder named after the genome FASTA (basename):
 - `valid_monomers.bed`
 - `satellitome_density_100kb_by_ref_long.tsv`
@@ -164,7 +164,7 @@ bash satDNA_density.sh
 
 ## satDNA_similarity.py – Automated alignment of satellite DNA monomers for variant and superfamily analysis
 
-### 📜 Description
+### Description
 **satDNA_similarity.py** performs automated, biologically informed alignments of **satellite DNA (satDNA) monomers** to classify them at two hierarchical levels:
 
 - **satDNA families** (true sequence variants of the same satellite)
@@ -191,13 +191,13 @@ bash satDNA_density.sh
 
 ---
 
-### 📂 Input
+### Input
 - A FASTA file containing **satDNA monomers**  
   (strict FASTA format: `>ID` followed by sequence)
 
 ---
 
-### 📂 Output Files
+### Output Files
 For an input file named `satellitome.fasta`, the script generates:
 
 - `satellitome.id80.family_reps.fasta`  
@@ -227,7 +227,7 @@ python3 satDNA_similarity.py
 
 ## gene_extractor.sh – Extract Gene Sequences from NCBI by Species
 
-### 📜 Description
+### Description
 Automates the retrieval of genomic sequences for a given gene across multiple species using **[NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK179288/)** and **datasets CLI**.
 
 ###  Features
@@ -244,11 +244,11 @@ conda install -c bioconda entrez-direct datasets-cli seqkit
 ```
 Also requires: unzip, cut, sed, find, head
 
-### 📂 Input Files
+### Input Files
 - Gene symbol (e.g., BRCA1)
 - Text file with one species per line
 
-### 📂 Output Files
+### Output Files
 - `{GENE_SYMBOL}_{SPECIES_NAME}.fasta`
 
 ###  Usage
@@ -260,7 +260,7 @@ bash gene_extractor.sh BRCA1 species.txt
 
 ## satFlank.sh – SatelliteDNA Flank Extraction and Gene Overlap Analysis Pipeline
 
-### 📜 Description
+### Description
 **satFlank.sh** identifies satellite DNA flanking regions using **BLAST**, extracts sequences, and compares with GFF annotations to find overlapping genes.
 
 ###  Features
@@ -275,12 +275,12 @@ bash gene_extractor.sh BRCA1 species.txt
 sudo apt-get install blast2 seqtk parallel
 ```
 
-### 📂 Input Files
+### Input Files
 1. Library file (FASTA)
 2. Reference sequence (FASTA)
 3. GFF annotation file
 
-### 📂 Output Files
+### Output Files
 - `monomeros_validos.filtrado.bed`
 - Extracted sequences (FASTA)
 - Gene overlap table (TSV)
@@ -305,7 +305,7 @@ You will be prompted to enter:
 
 ## monoMiner.py – Reference-guided Motif Mining from Short Reads
 
-### 📜 Description
+### Description
 monoMiner performs reference-guided motif discovery from sequencing libraries, enabling rapid detection and clustering of tandem repeat motifs across multiple datasets with parallel processing and automated filtering.
 
 ###  Dependencies
@@ -353,7 +353,7 @@ cpo    Catopsilia pomona
 python3 monoMiner.py
 ```
 
-## 📂 Output Files
+## Output Files
 .
 
 ├── final.fasta                    # Concatenated motifs
@@ -369,7 +369,7 @@ python3 monoMiner.py
 
 ---
 
-## 📜 License
+## License
 
 This project is licensed under the MIT License
 

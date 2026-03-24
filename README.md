@@ -80,7 +80,8 @@ pip install biopython pandas matplotlib seaborn
 ### Input Files
 1. Genome assemblies (FASTA format)
 2. Reference monomers (FASTA format)
-OBS: If you have a fasta with multi satDNAs, you can run the separe.sh before running the arrayScope, to separate each sequence in a diferent fasta :)
+
+OBS: If you have a fasta with multi satDNAs, you can run the separe_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta :)
 ### Output Files
 - `valid_monomers.bed`
 - `chromosomes_with_annotations.png`

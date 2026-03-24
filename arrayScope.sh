@@ -24,36 +24,32 @@ make_multiplied_fasta() {
     local multiplier="$2"
     local out_fa="$3"
 
-    # Robust FASTA reader:
-    # - Works with multi-line sequences
-    # - Cleans to ACGTN only (removes hyphens too)
-    # - Guarantees newline after each record
     awk -v m="$multiplier" '
         BEGIN { RS=">"; ORS=""; }
         NR>1 {
-            n = split($0, a, "\n");
-            header = a[1];
+            n = split($0, a, "\n")
+            header = a[1]
 
-            seq = "";
-            for (i=2; i<=n; i++) seq = seq a[i];
+            seq = ""
+            for (i=2; i<=n; i++) seq = seq a[i]
 
-            gsub(/[ \t\r]/, "", seq);
-            seq = toupper(seq);
-            gsub(/-/, "", seq);
-            gsub(/[^ACGTN]/, "", seq);
+            gsub(/[ \t\r]/, "", seq)
+            seq = toupper(seq)
+            gsub(/-/, "", seq)
+            gsub(/[^ACGTN]/, "", seq)
 
-            printf(">%s\n", header);
-            for (j=0; j<m; j++) printf("%s", seq);
-            printf("\n");
+            printf(">%s\n", header)
+            for (j=0; j<m; j++) printf("%s", seq)
+            printf("\n")
         }
     ' "$in_fa" > "$out_fa"
 }
 
 run_blast_for_ref() {
-    local ref_no_ext="$1"     # basename sem extensão do arquivo query
+    local ref_no_ext="$1"
     local temp_genome="$2"
     local multiplier="$3"
-    local temp_bed="$4"
+    local out_bed="$4"
 
     local ref_fasta=""
     if [ -f "${ref_no_ext}.fasta" ]; then
@@ -72,8 +68,6 @@ run_blast_for_ref() {
 
     local blast_output="blast_${ref_no_ext}.out"
 
-    # OUTFMT agora inclui qseqid explicitamente (coluna 1)
-    # e sseqid (coluna 2), sstart (col 3), send (col 4)
     blastn -task blastn \
         -outfmt "6 qseqid sseqid sstart send" \
         -db "$temp_genome" \
@@ -88,48 +82,56 @@ run_blast_for_ref() {
         return 0
     fi
 
-    # Agora o BED carrega o satDNA correto:
-    # Chromosome Start End Reference(qseqid)
-    # Merge nearby hits per (chromosome + qseqid) with dist=2000
     awk -v OFS='\t' '
         {
-            q=$1; chr=$2;
-            s=($3<$4)?$3:$4;
-            e=($3<$4)?$4:$3;
+            q=$1
+            chr=$2
+            s=($3<$4)?$3:$4
+            e=($3<$4)?$4:$3
             print q, chr, s, e
         }
     ' "$blast_output" \
     | sort -k2,2 -k1,1 -k3,3n \
     | awk -v OFS='\t' -v dist=2000 '
         {
-            q=$1; chr=$2; s=$3; e=$4;
+            q=$1
+            chr=$2
+            s=$3
+            e=$4
 
             if (NR==1) {
-                cq=q; cchr=chr; cs=s; ce=e;
+                cq=q
+                cchr=chr
+                cs=s
+                ce=e
             } else {
                 if (q==cq && chr==cchr && s <= ce + dist) {
-                    if (e > ce) ce=e;
+                    if (e > ce) ce=e
                 } else {
-                    print cchr, cs, ce, cq;
-                    cq=q; cchr=chr; cs=s; ce=e;
+                    print cchr, cs, ce, cq
+                    cq=q
+                    cchr=chr
+                    cs=s
+                    ce=e
                 }
             }
         }
         END {
-            if (NR>0) print cchr, cs, ce, cq;
+            if (NR>0) print cchr, cs, ce, cq
         }
-    ' >> "$temp_bed"
+    ' > "$out_bed"
 }
+
 export -f run_blast_for_ref remove_extensions make_multiplied_fasta
 
 read -e -p "Enter genome file names (space-separated): " input_biblios
-read -p "How many chromosomes sequences will be used? " num_sequences
+read -p "How many chromosome/scaffold sequences will be used? " num_sequences
 read -e -p "Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): " refs_in
-read -p "How many monomers will be used to create a array (here is the minimum monomers to form a array in this study)? " multiplier
-read -p "Quantas threads deseja utilizar? (ex: 4, 8, etc.): " NUM_THREADS
+read -p "How many monomers will be used to create an array (minimum monomers in this study)? " multiplier
+read -p "How many threads do you want to use? (e.g., 4, 8, etc.): " NUM_THREADS
 
 if ! command -v parallel &> /dev/null; then
-    echo "Erro: GNU parallel não está instalado. Use: conda install -c conda-forge parallel"
+    echo "Error: GNU parallel is not installed. Use: conda install -c conda-forge parallel"
     exit 1
 fi
 
@@ -155,58 +157,133 @@ for input_biblio in $input_biblios; do
     mkdir -p "$genome_name"
 
     temp_genome="$genome_name/temp_genome.fasta"
+
     awk -v num_seq="$num_sequences" '
         BEGIN { count = 0 }
-        /^>/ { if (count >= num_seq) exit; count++ }
+        /^>/ {
+            if (count >= num_seq) exit
+            count++
+        }
         { print }
     ' "$input_biblio" > "$temp_genome"
 
     makeblastdb -in "$temp_genome" -dbtype nucl -out "$temp_genome" -parse_seqids
 
-    temp_bed="$genome_name/valid_monomers_temp.bed"
-    > "$temp_bed"
+    tmp_parallel_dir="$genome_name/tmp_parallel_beds"
+    rm -rf "$tmp_parallel_dir"
+    mkdir -p "$tmp_parallel_dir"
 
-    parallel --jobs "$NUM_THREADS" run_blast_for_ref {} "$temp_genome" "$multiplier" "$temp_bed" ::: "${expanded_refs_no_ext[@]}"
+    parallel --jobs "$NUM_THREADS" \
+        run_blast_for_ref {} "$temp_genome" "$multiplier" "$tmp_parallel_dir/{}.bed" \
+        ::: "${expanded_refs_no_ext[@]}"
 
-    mv "$temp_bed" "$genome_name/valid_monomers.bed"
-    echo "Arquivo valid_monomers.bed criado para $genome_name."
+    cat "$tmp_parallel_dir"/*.bed 2>/dev/null | sort -k1,1 -k2,2n > "$genome_name/valid_monomers.bed" || true
+
+    if [ ! -s "$genome_name/valid_monomers.bed" ]; then
+        echo "The file valid_monomers.bed is empty for $genome_name."
+    else
+        echo "The file valid_monomers.bed was created for $genome_name."
+    fi
 
 python3 - <<EOF
 import os
 import json
+import re
+from collections import OrderedDict
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import SeqIO
-import re
+
+fasta_file = "$temp_genome"
+bed_file = "$genome_name/valid_monomers.bed"
+genome_name = "$genome_name"
+
+def natural_sort_key(text):
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'([0-9]+)', str(text))]
+
+def sanitize_accession(acc):
+    acc = str(acc).strip()
+    acc = acc.replace("ref|", "").replace("|", "")
+    acc = acc.split()[0]
+    return acc
+
+def infer_pretty_name_from_header(header, fallback_index):
+    h = str(header).strip()
+    h_low = h.lower()
+
+    m_chr = re.search(r'chromosome\\s+([0-9]+)', h_low)
+    if m_chr:
+        return f"Chromosome{m_chr.group(1)}"
+
+    m_scaf = re.search(r'scaffold[_\\s]+([0-9]+)', h_low)
+    if m_scaf:
+        return f"scaffold{m_scaf.group(1)}"
+
+    return f"Chromosome{fallback_index}"
+
+def build_header_mapping(fasta_path):
+    records_info = []
+    accession_to_pretty = OrderedDict()
+    pretty_to_length = OrderedDict()
+
+    idx = 0
+    for record in SeqIO.parse(fasta_path, "fasta"):
+        idx += 1
+        raw_header = record.description.strip()
+        accession = sanitize_accession(record.id)
+
+        pretty = infer_pretty_name_from_header(raw_header, idx)
+
+        if pretty in pretty_to_length:
+            pretty = f"{pretty}_{idx}"
+
+        accession_to_pretty[accession] = pretty
+        pretty_to_length[pretty] = len(record.seq)
+
+        records_info.append({
+            "index": idx,
+            "accession": accession,
+            "raw_header": raw_header,
+            "pretty_name": pretty,
+            "length": len(record.seq)
+        })
+
+    return accession_to_pretty, pretty_to_length, records_info
 
 def read_bed(filepath):
     if (not os.path.exists(filepath)) or os.path.getsize(filepath) == 0:
-        return pd.DataFrame(columns=['Chromosome','Start','End','Reference','References'])
-    df = pd.read_csv(filepath, sep='\\t', header=None, names=['Chromosome', 'Start', 'End', 'Reference'])
-    df['References'] = df['Reference'].apply(lambda x: [x] if pd.notna(x) else [])
+        return pd.DataFrame(columns=["Chromosome","Start","End","Reference","References"])
+
+    df = pd.read_csv(
+        filepath,
+        sep="\\t",
+        header=None,
+        names=["Chromosome", "Start", "End", "Reference"]
+    )
+
+    df["Chromosome"] = df["Chromosome"].astype(str).map(sanitize_accession)
+    df["Start"] = pd.to_numeric(df["Start"], errors="coerce")
+    df["End"] = pd.to_numeric(df["End"], errors="coerce")
+    df = df.dropna(subset=["Chromosome", "Start", "End", "Reference"]).copy()
+    df["Start"] = df["Start"].astype(int)
+    df["End"] = df["End"].astype(int)
+    df["References"] = df["Reference"].apply(lambda x: [x] if pd.notna(x) else [])
     return df
-
-def get_chromosome_lengths(fasta_path, chromosomes):
-    lengths = {}
-    chrom_set = set(chromosomes)
-    for record in SeqIO.parse(fasta_path, "fasta"):
-        if record.id in chrom_set:
-            lengths[record.id] = len(record.seq)
-    return lengths
-
-def natural_sort_key(text):
-    return [int(c) if c.isdigit() else c.lower() for c in re.split('([0-9]+)', str(text))]
 
 def merge_intervals(df, dist=2000):
     merged = []
-    df_sorted = df.sort_values(by=['Chromosome', 'Start', 'End']).reset_index(drop=True)
-    for chrom in df_sorted['Chromosome'].unique():
-        chrom_data = df_sorted[df_sorted['Chromosome'] == chrom]
+    df_sorted = df.sort_values(by=["Chromosome", "Start", "End"]).reset_index(drop=True)
+
+    for chrom in df_sorted["Chromosome"].unique():
+        chrom_data = df_sorted[df_sorted["Chromosome"] == chrom]
         current_start, current_end = None, None
         refs = set()
+
         for _, row in chrom_data.iterrows():
-            s, e, rlist = int(row['Start']), int(row['End']), row['References']
+            s, e, rlist = int(row["Start"]), int(row["End"]), row["References"]
+
             if current_start is None:
                 current_start, current_end = s, e
                 refs.update(rlist)
@@ -217,39 +294,51 @@ def merge_intervals(df, dist=2000):
                 merged.append([chrom, current_start, current_end, list(refs)])
                 current_start, current_end = s, e
                 refs = set(rlist)
+
         if current_start is not None:
             merged.append([chrom, current_start, current_end, list(refs)])
-    return pd.DataFrame(merged, columns=['Chromosome', 'Start', 'End', 'References'])
 
-fasta_file = "$temp_genome"
-bed_file = "$genome_name/valid_monomers.bed"
+    return pd.DataFrame(merged, columns=["Chromosome", "Start", "End", "References"])
+
+def save_header_mapping(records_info, out_tsv):
+    pd.DataFrame(records_info).to_csv(out_tsv, sep="\\t", index=False)
+
+accession_to_pretty, pretty_to_length, records_info = build_header_mapping(fasta_file)
+save_header_mapping(records_info, os.path.join(genome_name, "sequence_name_mapping.tsv"))
 
 df = read_bed(bed_file)
+
 if df.empty:
-    print("No BLAST hits found (valid_monomers.bed vazio). Pulando plots.")
+    print("No BLAST hits found (valid_monomers.bed is empty). Skipping plots.")
     raise SystemExit(0)
 
-relevant_chromosomes = df['Chromosome'].unique()
-chromosome_lengths = get_chromosome_lengths(fasta_file, relevant_chromosomes)
-df_filtered = df[df['Chromosome'].isin(chromosome_lengths)]
+df["Chromosome_original_accession"] = df["Chromosome"]
+df["Chromosome"] = df["Chromosome"].map(lambda x: accession_to_pretty.get(x, x))
 
-if df_filtered.empty or not chromosome_lengths:
-    print("Sem cromossomos relevantes após filtragem. Pulando plots.")
+valid_names = set(pretty_to_length.keys())
+df_filtered = df[df["Chromosome"].isin(valid_names)].copy()
+
+if df_filtered.empty or len(pretty_to_length) == 0:
+    print("No relevant chromosomes/scaffolds after standardization. Skipping plots.")
     raise SystemExit(0)
 
 df_merged = merge_intervals(df_filtered)
 
-bed_refs = df_merged['References'].explode().dropna().unique()
+if df_merged.empty:
+    print("No arrays found after merge. Skipping plots.")
+    raise SystemExit(0)
+
+bed_refs = df_merged["References"].explode().dropna().unique()
 all_refs = sorted(bed_refs, key=natural_sort_key)
 
 if len(all_refs) == 0:
-    print("Sem referências após merge. Pulando plots.")
+    print("No references found after merge. Skipping plots.")
     raise SystemExit(0)
 
-color_file = os.path.join("$genome_name", "reference_colors.json")
+color_file = os.path.join(genome_name, "reference_colors.json")
 
 if os.path.exists(color_file):
-    with open(color_file, 'r') as f:
+    with open(color_file, "r") as f:
         color_map = json.load(f)
 else:
     color_map = {}
@@ -259,110 +348,130 @@ if missing_refs:
     new_palette = sns.color_palette("pastel", len(missing_refs))
     for i, ref in enumerate(missing_refs):
         rgb = new_palette[i]
-        color_map[ref] = tuple(rgb)
+        color_map[ref] = [float(rgb[0]), float(rgb[1]), float(rgb[2])]
 
-with open(color_file, 'w') as f:
-    json.dump(color_map, f)
+with open(color_file, "w") as f:
+    json.dump(color_map, f, indent=2)
 
 color_map = {k: tuple(v) for k, v in color_map.items()}
 
+df_merged.to_csv(os.path.join(genome_name, "merged_arrays.tsv"), sep="\\t", index=False)
+df_filtered.to_csv(os.path.join(genome_name, "valid_monomers_mapped.tsv"), sep="\\t", index=False)
+
+sorted_chromosomes = sorted(pretty_to_length.keys(), key=natural_sort_key)
+
 reference_sizes = {}
 for ref in all_refs:
-    subset = df_merged[df_merged['References'].apply(lambda x: ref in x)]
-    sizes_ = subset['End'] - subset['Start']
-    reference_sizes[ref] = (int(sizes_.min()) if not sizes_.empty else 0, int(sizes_.max()) if not sizes_.empty else 0)
+    subset = df_merged[df_merged["References"].apply(lambda x: ref in x)]
+    sizes_ = subset["End"] - subset["Start"]
+    reference_sizes[ref] = (
+        int(sizes_.min()) if not sizes_.empty else 0,
+        int(sizes_.max()) if not sizes_.empty else 0
+    )
 
-sorted_chromosomes = sorted(chromosome_lengths.keys(), key=natural_sort_key)
-
-# Plot 1
+# =========================================================
+# PLOT 1: OLD-STYLE BEAUTIFUL CHROMOSOME ANNOTATION PLOT
+# =========================================================
 plt.figure(figsize=(36, 24))
 spacing = 1.5
+
 for idx, chrom in enumerate(sorted_chromosomes):
-    length = chromosome_lengths[chrom]
+    length = pretty_to_length[chrom]
     length_mb = length / 1e6
     y_pos = idx * spacing
-    plt.plot([0, length_mb], [y_pos, y_pos], color='lightgray', linewidth=3)
-    plt.fill_between([0, length_mb], y_pos - 0.4, y_pos + 0.4, color='lightgray', alpha=0.6)
 
-    chrom_data = df_merged[df_merged['Chromosome'] == chrom]
+    plt.plot([0, length_mb], [y_pos, y_pos], color="lightgray", linewidth=3, zorder=1)
+    plt.fill_between(
+        [0, length_mb],
+        y_pos - 0.4,
+        y_pos + 0.4,
+        color="lightgray",
+        alpha=0.6,
+        zorder=1
+    )
+
+    chrom_data = df_merged[df_merged["Chromosome"] == chrom]
     for _, row in chrom_data.iterrows():
-        start_mb = row['Start'] / 1e6
-        end_mb = row['End'] / 1e6
-        refs = row['References']
+        start_mb = row["Start"] / 1e6
+        end_mb = row["End"] / 1e6
+        refs = row["References"]
+
         if not refs:
             continue
-        segment_width = (end_mb - start_mb) / len(refs)
+
+        segment_width = (end_mb - start_mb) / len(refs) if len(refs) > 0 else 0
         for i, ref in enumerate(refs):
             c = color_map.get(ref, "#cccccc")
             plt.fill_between(
-                [start_mb + i*segment_width, start_mb + (i+1)*segment_width],
+                [start_mb + i * segment_width, start_mb + (i + 1) * segment_width],
                 y_pos - 0.4,
                 y_pos + 0.4,
                 color=c,
-                alpha=0.8
+                alpha=0.85,
+                zorder=2
             )
 
 handles = [plt.Line2D([0], [0], color=color_map[ref], lw=5) for ref in all_refs]
-labels  = [f"{ref} (min: {reference_sizes[ref][0]:,.0f} bp, max: {reference_sizes[ref][1]:,.0f} bp)" for ref in all_refs]
-plt.legend(handles, labels, title="References", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
+labels = [
+    f"{ref} (min: {reference_sizes[ref][0]:,} bp, max: {reference_sizes[ref][1]:,} bp)"
+    for ref in all_refs
+]
+
+plt.legend(handles, labels, title="References", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=12)
 plt.yticks([i * spacing for i in range(len(sorted_chromosomes))], sorted_chromosomes, fontsize=12)
-plt.xlabel('Base Pairs (Mb)', fontsize=14)
-plt.ylabel('Chromosome', fontsize=14)
-plt.title('Satellite Array Distribution Across Chromosomes', fontsize=16)
-plt.xlim(0, max(chromosome_lengths.values())/1e6)
+plt.xlabel("Base pairs (Mb)", fontsize=14)
+plt.ylabel("Sequences", fontsize=14)
+plt.title("Distribution of tandem repeat arrays across chromosomes/scaffolds", fontsize=16)
+plt.xlim(0, max(pretty_to_length.values()) / 1e6)
 plt.grid(False)
 plt.tight_layout()
-plt.savefig("$genome_name/chromosomes_with_annotations.png", dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(genome_name, "chromosomes_with_annotations.png"), dpi=300, bbox_inches="tight")
 plt.close()
 
-df_exploded = df_merged.explode('References')
-df_exploded = df_exploded[df_exploded['References'].notna()].copy()
-df_exploded['Size'] = df_exploded['End'] - df_exploded['Start']
+# =========================================================
+# PLOT 2: ARRAY SIZE VS CHROMOSOME/ SCAFFOLD SCATTER
+# =========================================================
+df_exploded = df_merged.explode("References")
+df_exploded = df_exploded[df_exploded["References"].notna()].copy()
+df_exploded["ArraySize"] = df_exploded["End"] - df_exploded["Start"] + 1
+df_exploded["Chromosome"] = pd.Categorical(
+    df_exploded["Chromosome"],
+    categories=sorted_chromosomes,
+    ordered=True
+)
 
 if df_exploded.empty:
-    print("Dados explodidos vazios. Pulando heatmap e scatter.")
+    print("No data available for the scatter plot. Skipping scatter.")
     raise SystemExit(0)
 
-heatmap_data = df_exploded.groupby(['Chromosome', 'References'])['Size'].sum().unstack()
-heatmap_data = heatmap_data.reindex(index=sorted_chromosomes, columns=all_refs).fillna(0)
-
-if heatmap_data.size == 0 or heatmap_data.to_numpy().sum() == 0:
-    print("Heatmap sem dados (tudo zero). Pulando heatmap.")
-else:
-    plt.figure(figsize=(12, 8))
-    sns.heatmap(heatmap_data, cmap='viridis', cbar_kws={'label': 'Total Base Pairs (bp)'})
-    plt.title('Total Base Pairs per Chromosome and Reference', fontsize=16)
-    plt.xlabel('Reference', fontsize=14)
-    plt.ylabel('Chromosome', fontsize=14)
-    plt.xticks(rotation=60)
-    plt.tight_layout()
-    plt.savefig("$genome_name/array_frequency_heatmap.png", dpi=300, bbox_inches='tight')
-    plt.close()
-
-df_exploded['Chromosome'] = pd.Categorical(df_exploded['Chromosome'], categories=sorted_chromosomes, ordered=True)
-plt.figure(figsize=(12, 8))
-sns.scatterplot(
+plt.figure(figsize=(18, 8))
+sns.stripplot(
     data=df_exploded,
-    x='Chromosome',
-    y='Size',
-    hue='References',
+    x="Chromosome",
+    y="ArraySize",
+    hue="References",
     hue_order=all_refs,
     palette=color_map,
-    alpha=0.7,
-    s=100
+    dodge=True,
+    alpha=0.85,
+    size=5
 )
-plt.title('Relationship Between Chromosome and Array Size', fontsize=16)
-plt.xlabel('Chromosome', fontsize=14)
-plt.ylabel('Array Size (bp)', fontsize=14)
-plt.xticks(rotation=60)
-plt.legend(title="References", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=12)
-plt.grid(True)
+plt.xticks(rotation=90)
+plt.xlabel("Sequences")
+plt.ylabel("Array size (bp)")
+plt.title("Array size distribution by chromosome/scaffold")
+plt.legend(title="References", bbox_to_anchor=(1.01, 1), loc="upper left")
 plt.tight_layout()
-plt.savefig("$genome_name/array_chromosome_vs_size_scatter.png", dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(genome_name, "array_chromosome_vs_size_scatter.png"), dpi=300, bbox_inches="tight")
 plt.close()
 
-print("Visualization plots saved.")
+print("Plots successfully generated in:", genome_name)
+print("Saved image:", os.path.join(genome_name, "chromosomes_with_annotations.png"))
+print("Saved image:", os.path.join(genome_name, "array_chromosome_vs_size_scatter.png"))
+print("Saved table:", os.path.join(genome_name, "valid_monomers.bed"))
+print("Saved table:", os.path.join(genome_name, "valid_monomers_mapped.tsv"))
+print("Saved table:", os.path.join(genome_name, "merged_arrays.tsv"))
+print("Saved table:", os.path.join(genome_name, "sequence_name_mapping.tsv"))
 EOF
 
 done
-

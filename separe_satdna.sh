@@ -19,4 +19,4 @@ END {
         close(outfile)
     }
 }
-' sats_conservados.fasta
+' satdnas.fasta

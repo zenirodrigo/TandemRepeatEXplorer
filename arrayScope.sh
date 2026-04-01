@@ -204,24 +204,88 @@ def natural_sort_key(text):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'([0-9]+)', str(text))]
 
 def sanitize_accession(acc):
+    """
+    Normaliza IDs de sequência para um formato comparável entre:
+    - FASTA headers
+    - record.id do Biopython
+    - sseqid do BLAST
+
+    Casos tratados:
+    - CM038702.1
+    - gb|CM038702.1|
+    - ref|NC_000001.1|
+    - lcl|scaffold_42
+    - gi|12345|gb|CM038702.1|
+    - strings com descrição após o accession
+    """
+    if acc is None:
+        return ""
+
     acc = str(acc).strip()
-    acc = acc.replace("ref|", "").replace("|", "")
-    acc = acc.split()[0]
-    return acc
+    if not acc:
+        return ""
+
+    # pega só o primeiro token antes de descrições
+    first = acc.split()[0]
+
+    # remove > caso venha header bruto
+    first = first.lstrip(">")
+
+    # caso simples já limpo
+    if "|" not in first:
+        return first
+
+    parts = [p for p in first.split("|") if p != ""]
+    if not parts:
+        return first
+
+    db_tags = {
+        "gb", "ref", "emb", "dbj", "sp", "tr", "lcl", "gi",
+        "gnl", "tpg", "tpe", "tpd", "pdb"
+    }
+
+    # prioridade: procurar algo com cara de accession real
+    # ex.: CM038702.1, NC_000001.1, NW_..., scaffold_42
+    accession_like = []
+    for p in parts:
+        if p.lower() in db_tags:
+            continue
+        if re.search(r'[A-Za-z]', p):
+            accession_like.append(p)
+
+    if accession_like:
+        # em gi|123|gb|CM038702.1| queremos o último accession útil
+        return accession_like[-1]
+
+    # fallback
+    return parts[-1]
 
 def infer_pretty_name_from_header(header, fallback_index):
     h = str(header).strip()
     h_low = h.lower()
 
-    m_chr = re.search(r'chromosome\\s+([0-9]+)', h_low)
+    m_chr = re.search(r'chromosome\s+([0-9]+)', h_low)
     if m_chr:
         return f"Chromosome{m_chr.group(1)}"
 
-    m_scaf = re.search(r'scaffold[_\\s]+([0-9]+)', h_low)
+    m_chr2 = re.search(r'\bchr(?:omosome)?[_\s-]*([0-9]+)\b', h_low)
+    if m_chr2:
+        return f"Chromosome{m_chr2.group(1)}"
+
+    m_scaf = re.search(r'scaffold[_\s-]*([0-9]+)', h_low)
     if m_scaf:
         return f"scaffold{m_scaf.group(1)}"
 
-    return f"Chromosome{fallback_index}"
+    m_ctg = re.search(r'contig[_\s-]*([0-9]+)', h_low)
+    if m_ctg:
+        return f"contig{m_ctg.group(1)}"
+
+    # tenta usar accession se tiver algo informativo
+    token = sanitize_accession(h)
+    if token:
+        return token
+
+    return f"Sequence{fallback_index}"
 
 def build_header_mapping(fasta_path):
     records_info = []
@@ -232,20 +296,28 @@ def build_header_mapping(fasta_path):
     for record in SeqIO.parse(fasta_path, "fasta"):
         idx += 1
         raw_header = record.description.strip()
-        accession = sanitize_accession(record.id)
+
+        candidates = []
+        for c in [record.id, raw_header]:
+            val = sanitize_accession(c)
+            if val and val not in candidates:
+                candidates.append(val)
 
         pretty = infer_pretty_name_from_header(raw_header, idx)
 
         if pretty in pretty_to_length:
             pretty = f"{pretty}_{idx}"
 
-        accession_to_pretty[accession] = pretty
+        for acc in candidates:
+            accession_to_pretty[acc] = pretty
+
         pretty_to_length[pretty] = len(record.seq)
 
         records_info.append({
             "index": idx,
-            "accession": accession,
+            "record_id": record.id,
             "raw_header": raw_header,
+            "normalized_candidates": ";".join(candidates),
             "pretty_name": pretty,
             "length": len(record.seq)
         })
@@ -258,12 +330,13 @@ def read_bed(filepath):
 
     df = pd.read_csv(
         filepath,
-        sep="\\t",
+        sep="\t",
         header=None,
         names=["Chromosome", "Start", "End", "Reference"]
     )
 
-    df["Chromosome"] = df["Chromosome"].astype(str).map(sanitize_accession)
+    df["Chromosome_raw"] = df["Chromosome"].astype(str)
+    df["Chromosome"] = df["Chromosome_raw"].map(sanitize_accession)
     df["Start"] = pd.to_numeric(df["Start"], errors="coerce")
     df["End"] = pd.to_numeric(df["End"], errors="coerce")
     df = df.dropna(subset=["Chromosome", "Start", "End", "Reference"]).copy()
@@ -291,17 +364,17 @@ def merge_intervals(df, dist=2000):
                 current_end = max(current_end, e)
                 refs.update(rlist)
             else:
-                merged.append([chrom, current_start, current_end, list(refs)])
+                merged.append([chrom, current_start, current_end, sorted(refs, key=natural_sort_key)])
                 current_start, current_end = s, e
                 refs = set(rlist)
 
         if current_start is not None:
-            merged.append([chrom, current_start, current_end, list(refs)])
+            merged.append([chrom, current_start, current_end, sorted(refs, key=natural_sort_key)])
 
     return pd.DataFrame(merged, columns=["Chromosome", "Start", "End", "References"])
 
 def save_header_mapping(records_info, out_tsv):
-    pd.DataFrame(records_info).to_csv(out_tsv, sep="\\t", index=False)
+    pd.DataFrame(records_info).to_csv(out_tsv, sep="\t", index=False)
 
 accession_to_pretty, pretty_to_length, records_info = build_header_mapping(fasta_file)
 save_header_mapping(records_info, os.path.join(genome_name, "sequence_name_mapping.tsv"))
@@ -320,6 +393,8 @@ df_filtered = df[df["Chromosome"].isin(valid_names)].copy()
 
 if df_filtered.empty or len(pretty_to_length) == 0:
     print("No relevant chromosomes/scaffolds after standardization. Skipping plots.")
+    print("Example normalized BED names:", df["Chromosome_original_accession"].head(10).tolist())
+    print("Example FASTA normalized names:", list(accession_to_pretty.keys())[:10])
     raise SystemExit(0)
 
 df_merged = merge_intervals(df_filtered)
@@ -355,23 +430,20 @@ with open(color_file, "w") as f:
 
 color_map = {k: tuple(v) for k, v in color_map.items()}
 
-df_merged.to_csv(os.path.join(genome_name, "merged_arrays.tsv"), sep="\\t", index=False)
-df_filtered.to_csv(os.path.join(genome_name, "valid_monomers_mapped.tsv"), sep="\\t", index=False)
+df_merged.to_csv(os.path.join(genome_name, "merged_arrays.tsv"), sep="\t", index=False)
+df_filtered.to_csv(os.path.join(genome_name, "valid_monomers_mapped.tsv"), sep="\t", index=False)
 
 sorted_chromosomes = sorted(pretty_to_length.keys(), key=natural_sort_key)
 
 reference_sizes = {}
 for ref in all_refs:
     subset = df_merged[df_merged["References"].apply(lambda x: ref in x)]
-    sizes_ = subset["End"] - subset["Start"]
+    sizes_ = subset["End"] - subset["Start"] + 1
     reference_sizes[ref] = (
         int(sizes_.min()) if not sizes_.empty else 0,
         int(sizes_.max()) if not sizes_.empty else 0
     )
 
-# =========================================================
-# PLOT 1: OLD-STYLE BEAUTIFUL CHROMOSOME ANNOTATION PLOT
-# =========================================================
 plt.figure(figsize=(36, 24))
 spacing = 1.5
 
@@ -428,9 +500,6 @@ plt.tight_layout()
 plt.savefig(os.path.join(genome_name, "chromosomes_with_annotations.png"), dpi=300, bbox_inches="tight")
 plt.close()
 
-# =========================================================
-# PLOT 2: ARRAY SIZE VS CHROMOSOME/ SCAFFOLD SCATTER
-# =========================================================
 df_exploded = df_merged.explode("References")
 df_exploded = df_exploded[df_exploded["References"].notna()].copy()
 df_exploded["ArraySize"] = df_exploded["End"] - df_exploded["Start"] + 1

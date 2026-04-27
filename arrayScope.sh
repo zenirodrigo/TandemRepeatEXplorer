@@ -204,88 +204,24 @@ def natural_sort_key(text):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'([0-9]+)', str(text))]
 
 def sanitize_accession(acc):
-    """
-    Normaliza IDs de sequência para um formato comparável entre:
-    - FASTA headers
-    - record.id do Biopython
-    - sseqid do BLAST
-
-    Casos tratados:
-    - CM038702.1
-    - gb|CM038702.1|
-    - ref|NC_000001.1|
-    - lcl|scaffold_42
-    - gi|12345|gb|CM038702.1|
-    - strings com descrição após o accession
-    """
-    if acc is None:
-        return ""
-
     acc = str(acc).strip()
-    if not acc:
-        return ""
-
-    # pega só o primeiro token antes de descrições
-    first = acc.split()[0]
-
-    # remove > caso venha header bruto
-    first = first.lstrip(">")
-
-    # caso simples já limpo
-    if "|" not in first:
-        return first
-
-    parts = [p for p in first.split("|") if p != ""]
-    if not parts:
-        return first
-
-    db_tags = {
-        "gb", "ref", "emb", "dbj", "sp", "tr", "lcl", "gi",
-        "gnl", "tpg", "tpe", "tpd", "pdb"
-    }
-
-    # prioridade: procurar algo com cara de accession real
-    # ex.: CM038702.1, NC_000001.1, NW_..., scaffold_42
-    accession_like = []
-    for p in parts:
-        if p.lower() in db_tags:
-            continue
-        if re.search(r'[A-Za-z]', p):
-            accession_like.append(p)
-
-    if accession_like:
-        # em gi|123|gb|CM038702.1| queremos o último accession útil
-        return accession_like[-1]
-
-    # fallback
-    return parts[-1]
+    acc = acc.replace("ref|", "").replace("|", "")
+    acc = acc.split()[0]
+    return acc
 
 def infer_pretty_name_from_header(header, fallback_index):
     h = str(header).strip()
     h_low = h.lower()
 
-    m_chr = re.search(r'chromosome\s+([0-9]+)', h_low)
+    m_chr = re.search(r'chromosome\\s+([0-9]+)', h_low)
     if m_chr:
         return f"Chromosome{m_chr.group(1)}"
 
-    m_chr2 = re.search(r'\bchr(?:omosome)?[_\s-]*([0-9]+)\b', h_low)
-    if m_chr2:
-        return f"Chromosome{m_chr2.group(1)}"
-
-    m_scaf = re.search(r'scaffold[_\s-]*([0-9]+)', h_low)
+    m_scaf = re.search(r'scaffold[_\\s]+([0-9]+)', h_low)
     if m_scaf:
         return f"scaffold{m_scaf.group(1)}"
 
-    m_ctg = re.search(r'contig[_\s-]*([0-9]+)', h_low)
-    if m_ctg:
-        return f"contig{m_ctg.group(1)}"
-
-    # tenta usar accession se tiver algo informativo
-    token = sanitize_accession(h)
-    if token:
-        return token
-
-    return f"Sequence{fallback_index}"
+    return f"Chromosome{fallback_index}"
 
 def build_header_mapping(fasta_path):
     records_info = []
@@ -296,28 +232,20 @@ def build_header_mapping(fasta_path):
     for record in SeqIO.parse(fasta_path, "fasta"):
         idx += 1
         raw_header = record.description.strip()
-
-        candidates = []
-        for c in [record.id, raw_header]:
-            val = sanitize_accession(c)
-            if val and val not in candidates:
-                candidates.append(val)
+        accession = sanitize_accession(record.id)
 
         pretty = infer_pretty_name_from_header(raw_header, idx)
 
         if pretty in pretty_to_length:
             pretty = f"{pretty}_{idx}"
 
-        for acc in candidates:
-            accession_to_pretty[acc] = pretty
-
+        accession_to_pretty[accession] = pretty
         pretty_to_length[pretty] = len(record.seq)
 
         records_info.append({
             "index": idx,
-            "record_id": record.id,
+            "accession": accession,
             "raw_header": raw_header,
-            "normalized_candidates": ";".join(candidates),
             "pretty_name": pretty,
             "length": len(record.seq)
         })
@@ -330,13 +258,12 @@ def read_bed(filepath):
 
     df = pd.read_csv(
         filepath,
-        sep="\t",
+        sep="\\t",
         header=None,
         names=["Chromosome", "Start", "End", "Reference"]
     )
 
-    df["Chromosome_raw"] = df["Chromosome"].astype(str)
-    df["Chromosome"] = df["Chromosome_raw"].map(sanitize_accession)
+    df["Chromosome"] = df["Chromosome"].astype(str).map(sanitize_accession)
     df["Start"] = pd.to_numeric(df["Start"], errors="coerce")
     df["End"] = pd.to_numeric(df["End"], errors="coerce")
     df = df.dropna(subset=["Chromosome", "Start", "End", "Reference"]).copy()
@@ -364,17 +291,17 @@ def merge_intervals(df, dist=2000):
                 current_end = max(current_end, e)
                 refs.update(rlist)
             else:
-                merged.append([chrom, current_start, current_end, sorted(refs, key=natural_sort_key)])
+                merged.append([chrom, current_start, current_end, list(refs)])
                 current_start, current_end = s, e
                 refs = set(rlist)
 
         if current_start is not None:
-            merged.append([chrom, current_start, current_end, sorted(refs, key=natural_sort_key)])
+            merged.append([chrom, current_start, current_end, list(refs)])
 
     return pd.DataFrame(merged, columns=["Chromosome", "Start", "End", "References"])
 
 def save_header_mapping(records_info, out_tsv):
-    pd.DataFrame(records_info).to_csv(out_tsv, sep="\t", index=False)
+    pd.DataFrame(records_info).to_csv(out_tsv, sep="\\t", index=False)
 
 accession_to_pretty, pretty_to_length, records_info = build_header_mapping(fasta_file)
 save_header_mapping(records_info, os.path.join(genome_name, "sequence_name_mapping.tsv"))
@@ -393,8 +320,6 @@ df_filtered = df[df["Chromosome"].isin(valid_names)].copy()
 
 if df_filtered.empty or len(pretty_to_length) == 0:
     print("No relevant chromosomes/scaffolds after standardization. Skipping plots.")
-    print("Example normalized BED names:", df["Chromosome_original_accession"].head(10).tolist())
-    print("Example FASTA normalized names:", list(accession_to_pretty.keys())[:10])
     raise SystemExit(0)
 
 df_merged = merge_intervals(df_filtered)
@@ -412,94 +337,255 @@ if len(all_refs) == 0:
 
 color_file = os.path.join(genome_name, "reference_colors.json")
 
-if os.path.exists(color_file):
-    with open(color_file, "r") as f:
-        color_map = json.load(f)
-else:
-    color_map = {}
+# High-contrast colors for the chromosome plot.
+# This intentionally overwrites old pastel colors, because pastel colors made the arrays hard to see.
+base_palette = []
+base_palette.extend(sns.color_palette("tab10", 10))
+base_palette.extend(sns.color_palette("Dark2", 8))
+base_palette.extend(sns.color_palette("Set1", 9))
 
-missing_refs = [r for r in all_refs if r not in color_map]
-if missing_refs:
-    new_palette = sns.color_palette("pastel", len(missing_refs))
-    for i, ref in enumerate(missing_refs):
-        rgb = new_palette[i]
-        color_map[ref] = [float(rgb[0]), float(rgb[1]), float(rgb[2])]
+color_map = {}
+for i, ref in enumerate(all_refs):
+    rgb = base_palette[i % len(base_palette)]
+    color_map[ref] = [float(rgb[0]), float(rgb[1]), float(rgb[2])]
 
 with open(color_file, "w") as f:
     json.dump(color_map, f, indent=2)
 
 color_map = {k: tuple(v) for k, v in color_map.items()}
 
-df_merged.to_csv(os.path.join(genome_name, "merged_arrays.tsv"), sep="\t", index=False)
-df_filtered.to_csv(os.path.join(genome_name, "valid_monomers_mapped.tsv"), sep="\t", index=False)
+df_merged.to_csv(os.path.join(genome_name, "merged_arrays.tsv"), sep="\\t", index=False)
+df_filtered.to_csv(os.path.join(genome_name, "valid_monomers_mapped.tsv"), sep="\\t", index=False)
 
 sorted_chromosomes = sorted(pretty_to_length.keys(), key=natural_sort_key)
 
 reference_sizes = {}
 for ref in all_refs:
     subset = df_merged[df_merged["References"].apply(lambda x: ref in x)]
-    sizes_ = subset["End"] - subset["Start"] + 1
+    sizes_ = subset["End"] - subset["Start"]
     reference_sizes[ref] = (
         int(sizes_.min()) if not sizes_.empty else 0,
         int(sizes_.max()) if not sizes_.empty else 0
     )
 
-plt.figure(figsize=(36, 24))
-spacing = 1.5
+# =========================================================
+# PLOT 1: CHROMOSOME ANNOTATION PLOT - X-SCALED ARRAYS
+# =========================================================
+# Key interpretation:
+#   - X position = genomic coordinate on the chromosome/scaffold.
+#   - Rectangle width = array genomic interval, from Start to End.
+#   - Rectangle height = only visual thickness; it does NOT encode array size.
+#
+# Output logic:
+#   1) chromosomes_with_annotations_exact_scale.png/pdf
+#      Every array has its exact genomic width. This is the biologically faithful version.
+#      Very small arrays can be almost invisible on whole-chromosome scale.
+#
+#   2) chromosomes_with_annotations.png/pdf
+#      Same genomic positions, but very small arrays receive a minimum visible display width.
+#      This is the main readable version. Tiny arrays are visually exaggerated, while large
+#      arrays remain true-scale when they are above the minimum display width.
+#
+# I am not saving a separate chromosomes_with_annotations_visible.* anymore, because it was
+# identical to chromosomes_with_annotations.* and only created confusing duplicate outputs.
+# =========================================================
+from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.ticker import MultipleLocator
 
-for idx, chrom in enumerate(sorted_chromosomes):
-    length = pretty_to_length[chrom]
-    length_mb = length / 1e6
-    y_pos = idx * spacing
 
-    plt.plot([0, length_mb], [y_pos, y_pos], color="lightgray", linewidth=3, zorder=1)
-    plt.fill_between(
-        [0, length_mb],
-        y_pos - 0.4,
-        y_pos + 0.4,
-        color="lightgray",
-        alpha=0.6,
-        zorder=1
-    )
+def merge_intervals_by_reference(df, dist=2000):
+    rows = []
+    tmp = df.copy()
+    tmp["Reference"] = tmp["Reference"].astype(str)
+    tmp = tmp.sort_values(["Chromosome", "Reference", "Start", "End"]).reset_index(drop=True)
 
-    chrom_data = df_merged[df_merged["Chromosome"] == chrom]
-    for _, row in chrom_data.iterrows():
-        start_mb = row["Start"] / 1e6
-        end_mb = row["End"] / 1e6
-        refs = row["References"]
+    for (chrom, ref), sub in tmp.groupby(["Chromosome", "Reference"], sort=False):
+        current_start = None
+        current_end = None
 
-        if not refs:
+        for _, row in sub.iterrows():
+            s = int(row["Start"])
+            e = int(row["End"])
+            if s > e:
+                s, e = e, s
+
+            if current_start is None:
+                current_start = s
+                current_end = e
+            elif s <= current_end + dist:
+                current_end = max(current_end, e)
+            else:
+                rows.append([chrom, current_start, current_end, ref])
+                current_start = s
+                current_end = e
+
+        if current_start is not None:
+            rows.append([chrom, current_start, current_end, ref])
+
+    out = pd.DataFrame(rows, columns=["Chromosome", "Start", "End", "Reference"])
+    if not out.empty:
+        out["ArraySize"] = out["End"] - out["Start"] + 1
+        out = out.sort_values(["Chromosome", "Reference", "Start", "End"]).reset_index(drop=True)
+    return out
+
+
+def draw_chromosome_array_plot(plot_arrays, out_prefix, enhanced_visibility=False, min_visible_kb=80):
+    sorted_chromosomes_for_axis = list(sorted_chromosomes)[::-1]
+    max_len_mb = max(pretty_to_length.values()) / 1e6
+
+    chrom_height = 0.58
+    array_height = 0.50
+    spacing = 1.08
+    fig_width = 38
+    fig_height = max(14, len(sorted_chromosomes_for_axis) * 0.48)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    y_positions = {}
+
+    for idx, chrom in enumerate(sorted_chromosomes_for_axis):
+        y = idx * spacing
+        y_positions[chrom] = y
+        length_mb = pretty_to_length[chrom] / 1e6
+
+        body = FancyBboxPatch(
+            (0, y - chrom_height / 2),
+            length_mb,
+            chrom_height,
+            boxstyle=f"round,pad=0.00,rounding_size={chrom_height * 0.22}",
+            linewidth=0.40,
+            edgecolor="#bdbdbd",
+            facecolor="#f1f1f1",
+            alpha=1.00,
+            zorder=1,
+        )
+        ax.add_patch(body)
+
+    plot_arrays_sorted = plot_arrays.sort_values("ArraySize", ascending=True).reset_index(drop=True)
+    min_visible_mb = float(min_visible_kb) / 1000.0
+
+    for _, row in plot_arrays_sorted.iterrows():
+        chrom = row["Chromosome"]
+        if chrom not in y_positions:
             continue
 
-        segment_width = (end_mb - start_mb) / len(refs) if len(refs) > 0 else 0
-        for i, ref in enumerate(refs):
-            c = color_map.get(ref, "#cccccc")
-            plt.fill_between(
-                [start_mb + i * segment_width, start_mb + (i + 1) * segment_width],
-                y_pos - 0.4,
-                y_pos + 0.4,
-                color=c,
-                alpha=0.85,
-                zorder=2
-            )
+        ref = row["Reference"]
+        start_bp = int(row["Start"])
+        end_bp = int(row["End"])
+        if start_bp > end_bp:
+            start_bp, end_bp = end_bp, start_bp
 
-handles = [plt.Line2D([0], [0], color=color_map[ref], lw=5) for ref in all_refs]
-labels = [
-    f"{ref} (min: {reference_sizes[ref][0]:,} bp, max: {reference_sizes[ref][1]:,} bp)"
-    for ref in all_refs
-]
+        true_start_mb = start_bp / 1e6
+        true_end_mb = end_bp / 1e6
+        true_width_mb = max(true_end_mb - true_start_mb, 1e-9)
 
-plt.legend(handles, labels, title="References", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize=12)
-plt.yticks([i * spacing for i in range(len(sorted_chromosomes))], sorted_chromosomes, fontsize=12)
-plt.xlabel("Base pairs (Mb)", fontsize=14)
-plt.ylabel("Sequences", fontsize=14)
-plt.title("Distribution of tandem repeat arrays across chromosomes/scaffolds", fontsize=16)
-plt.xlim(0, max(pretty_to_length.values()) / 1e6)
-plt.grid(False)
-plt.tight_layout()
-plt.savefig(os.path.join(genome_name, "chromosomes_with_annotations.png"), dpi=300, bbox_inches="tight")
-plt.close()
+        if enhanced_visibility:
+            display_width_mb = max(true_width_mb, min_visible_mb)
+            midpoint_mb = (true_start_mb + true_end_mb) / 2.0
+            start_mb = max(0.0, midpoint_mb - display_width_mb / 2.0)
+            end_mb = min(pretty_to_length[chrom] / 1e6, midpoint_mb + display_width_mb / 2.0)
+            width_mb = max(end_mb - start_mb, 1e-9)
+        else:
+            start_mb = true_start_mb
+            width_mb = true_width_mb
 
+        y = y_positions[chrom]
+        color = color_map.get(ref, "#777777")
+
+        rect = Rectangle(
+            (start_mb, y - array_height / 2),
+            width_mb,
+            array_height,
+            linewidth=0.18,
+            edgecolor=color,
+            facecolor=color,
+            alpha=0.98,
+            zorder=5,
+        )
+        ax.add_patch(rect)
+
+    reference_sizes_for_plot = {}
+    for ref in all_refs:
+        subset = plot_arrays[plot_arrays["Reference"] == ref]
+        sizes_ = subset["ArraySize"]
+        reference_sizes_for_plot[ref] = (
+            int(sizes_.min()) if not sizes_.empty else 0,
+            int(sizes_.max()) if not sizes_.empty else 0,
+        )
+
+    handles = [
+        Rectangle((0, 0), 1, 1, facecolor=color_map[ref], edgecolor=color_map[ref], alpha=0.98)
+        for ref in all_refs
+    ]
+    labels = [
+        f"{ref} (min: {reference_sizes_for_plot[ref][0]:,} bp; max: {reference_sizes_for_plot[ref][1]:,} bp)"
+        for ref in all_refs
+    ]
+
+    ax.set_yticks([y_positions[c] for c in sorted_chromosomes_for_axis])
+    ax.set_yticklabels(sorted_chromosomes_for_axis, fontsize=10)
+    ax.set_xlabel("Position on chromosome/scaffold (Mb)", fontsize=12)
+    ax.set_ylabel("Chromosomes/scaffolds", fontsize=12)
+
+    if enhanced_visibility:
+        title_suffix = f"visible mode; arrays < {min_visible_kb} kb widened for display"
+    else:
+        title_suffix = "exact scale"
+    ax.set_title(f"Distribution of tandem repeat arrays across chromosomes/scaffolds ({title_suffix})", fontsize=14, pad=12)
+
+    ax.set_xlim(0, max_len_mb * 1.015)
+    ax.set_ylim(-spacing, (len(sorted_chromosomes_for_axis) - 1) * spacing + spacing)
+
+    ax.xaxis.set_major_locator(MultipleLocator(10))
+    ax.xaxis.set_minor_locator(MultipleLocator(5))
+    ax.grid(axis="x", which="major", color="#d0d0d0", linewidth=0.45, alpha=0.65, zorder=0)
+    ax.grid(axis="x", which="minor", color="#eeeeee", linewidth=0.25, alpha=0.55, zorder=0)
+    ax.grid(axis="y", visible=False)
+
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#777777")
+    ax.spines["bottom"].set_color("#777777")
+
+    ax.legend(
+        handles,
+        labels,
+        title="References",
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left",
+        fontsize=9,
+        title_fontsize=10,
+        frameon=True,
+        borderaxespad=0.0,
+    )
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(genome_name, f"{out_prefix}.png"), dpi=600, bbox_inches="tight")
+    fig.savefig(os.path.join(genome_name, f"{out_prefix}.pdf"), bbox_inches="tight")
+    plt.close(fig)
+
+
+plot_arrays = merge_intervals_by_reference(df_filtered, dist=2000)
+plot_arrays.to_csv(os.path.join(genome_name, "arrays_by_reference_for_plot.tsv"), sep="\t", index=False)
+
+if plot_arrays.empty:
+    print("No arrays available for chromosome plot. Skipping chromosome plot.")
+else:
+    draw_chromosome_array_plot(
+        plot_arrays=plot_arrays,
+        out_prefix="chromosomes_with_annotations_exact_scale",
+        enhanced_visibility=False,
+        min_visible_kb=80,
+    )
+    draw_chromosome_array_plot(
+        plot_arrays=plot_arrays,
+        out_prefix="chromosomes_with_annotations",
+        enhanced_visibility=True,
+        min_visible_kb=80,
+    )
+
+# =========================================================
+# PLOT 2: ARRAY SIZE VS CHROMOSOME/ SCAFFOLD SCATTER
+# =========================================================
 df_exploded = df_merged.explode("References")
 df_exploded = df_exploded[df_exploded["References"].notna()].copy()
 df_exploded["ArraySize"] = df_exploded["End"] - df_exploded["Start"] + 1
@@ -544,3 +630,5 @@ print("Saved table:", os.path.join(genome_name, "sequence_name_mapping.tsv"))
 EOF
 
 done
+
+

@@ -94,7 +94,8 @@ bash arrayScope.sh
 
 ```
 ### Exemple of results
-<img width="1077" height="717" alt="chromosomes_with_annotations" src="https://github.com/user-attachments/assets/96fc8939-23a9-46fa-b957-52c160d372ae" />
+<img width="22750" height="8326" alt="chromosomes_with_annotations" src="https://github.com/user-attachments/assets/e02f8d06-02b7-48e5-bada-8755d89b70a4" />
+<img width="5375" height="2365" alt="array_chromosome_vs_size_scatter" src="https://github.com/user-attachments/assets/b8adcc18-9a46-48f4-9222-37a40fe9aba0" />
 
 
 

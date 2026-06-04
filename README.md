@@ -225,17 +225,29 @@ The program was specifically designed for comparative satellitome analyses invol
 ### Family-level Outputs
 Each family generates a set of files including:
 #### Original family members
+
 - Family_000001_AmeSat01.members.fasta
+ 
 Contains all original monomers assigned to the family.
+
 - Frame-corrected monomers
+
 Family_000001_AmeSat01.frame_corrected_monomers.fasta
+
 All family members are rotated and oriented relative to the family representative while preserving their original monomer length.
+
 - Pairwise representative-member alignments
+
 Family_000001_AmeSat01.pairwise_to_first_representative.fasta
+
 Contains pairwise alignments between the family representative and each family member.
+
 - Representative-anchored family alignment
+
 Family_000001_AmeSat01.firstseq_reference_anchored_alignment.fasta
+
 Family-wide alignment generated after circular phase correction, suitable for visualization in Geneious, AliView, Jalview and related software.
+
 
 ---
 

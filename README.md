@@ -5,7 +5,7 @@
 
 <img align="right" src="social-preview.png?raw=1" width="250" alt="Repository Icon">
 <br clear="right">
-<h1>Tandem Repeat Explorer 🦖🧬</h1>
+<h1>Tandem Repeat Explorer</h1>
 
 
 Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identification, characterization, and visualization of tandem arrays from genome assemblies and short-read sequencing data.
@@ -42,22 +42,26 @@ conda activate trex_env
 ## arrayScope.sh – Genome Repeat Analysis Pipeline
 
 ### Description
-**ArrayScope** is a **Bash + Python** pipeline designed to identify and visualize satellite DNA arrays in genome assemblies.  
-It processes multiple genomes and reference monomers, runs **[BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)**, merges nearby repeat regions (< 2000 bp apart), and generates high-quality plots for chromosome-scale visualization.
+**ArrayScope** is a **Bash + Python** pipeline designed to identify, characterize and visualize tandem repeat arrays in genome assemblies.
 
+The pipeline processes multiple genome assemblies and reference monomers, performs **BLAST+** searches, automatically groups neighboring hits into arrays using an adaptive distance approach, and generates chromosome-scale visualizations and quantitative summaries.
+
+ArrayScope was designed to work with both individual satDNA monomers and complete satellitome datasets.
 > For variants in reference files — e.g., two slightly different monomers or the same repeat from different species, include an underscore `_` in the filename.
 
-###  Features
-- Processes **multiple genome assemblies** and reference monomer files
-- Fully automated **BLAST** analysis with configurable parameters
-- Merges nearby repeat hits (< 2000 bp apart)
-- Generates three publication-quality visualizations:
-  1. Chromosome-scale repeat distribution (linear map)
-  2. Heatmap of total base pairs per chromosome/reference
-  3. Scatter plot of array sizes by chromosome
-- Handles `.fa`, `.fna`, `.fasta` formats
-- Parallel processing using **[GNU parallel](https://www.gnu.org/software/parallel/)**
+### Features
 
+- Processes **multiple genome assemblies** and reference monomer files
+- Accepts single satDNA monomers or complete satellitome datasets
+- Fully automated **BLAST** analysis with configurable parameters
+- Adaptive array construction based on observed genomic spacing between hits
+- Automatic estimation of array boundaries
+- Generates publication-quality chromosome-scale visualizations
+- Produces detailed tabular summaries of arrays
+- Handles `.fa`, `.fna`, and `.fasta` formats
+- Parallel processing using **GNU Parallel**
+- Suitable for large genome assemblies
+  
 ###  Dependencies
 - **BLAST+** (`makeblastdb`, `blastn`)
 - **[GNU parallel](https://www.gnu.org/software/parallel/)**
@@ -83,10 +87,18 @@ pip install biopython pandas matplotlib seaborn
 
 OBS: If you have a fasta with multi satDNAs, you can run the separe_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta :)
 ### Output Files
+
+Main outputs include:
+
+- `raw_blast_hits.tsv`
+- `array_summary.tsv`
+- `array_statistics.tsv`
 - `valid_monomers.bed`
 - `chromosomes_with_annotations.png`
-- `array_frequency_heatmap.png`
+- `heatmap_chromosome_vs_satdna_total_bp.png`
 - `array_chromosome_vs_size_scatter.png`
+
+Additional auxiliary files may also be generated depending on the selected parameters.
 
 ###  Usage
 ```bash
@@ -167,23 +179,33 @@ bash satDNA_density.sh
 ## satDNA_similarity.py – Automated alignment of satellite DNA monomers for variant and superfamily analysis
 
 ### Description
-**satDNA_similarity.py** performs automated, biologically informed alignments of **satellite DNA (satDNA) monomers** to classify them at two hierarchical levels:
 
-- **satDNA families** (true sequence variants of the same satellite)
-- **satDNA superfamilies** (homologous but distinct satellites)
+**satDNA_similarity.py** is a Python-based toolkit for clustering satellite DNA monomers into biologically meaningful families.
 
+The program performs circular-aware sequence comparisons, automatically handling:
+
+- Circular phase shifts
+- Reverse-complement relationships
+- Insertions and deletions (indels)
+- Monomer length variation
+
+Families are built using a complete-linkage strategy, preventing unrelated monomers from being merged through transitive similarity chains.
+
+The program was specifically designed for comparative satellitome analyses involving hundreds to thousands of satDNA monomers from multiple species.
 ---
 
 ### Features
-- Alignment-based comparison of satDNA monomers
-- Use the idea of **circular sequences** (no fixed start position)
-- **Reverse-complement equivalence**
-- **Insertions and deletions (gaps)** included in similarity estimates
-- Automatic distinction between **families (variants)** and **superfamilies (homology only)**
-- Supports **very long monomers** (including >5 kb)
-- Generates alignment **proof files** for full biological traceability
-- Produces strict FASTA outputs compatible with downstream tools
 
+- Circular sequence comparison
+- Reverse-complement equivalence
+- Gap-aware similarity estimation
+- Complete-linkage family clustering
+- Family representative selection
+- Automatic generation of family FASTA files
+- Circular phase correction relative to family representatives
+- Pairwise representative-member alignments
+- Family-wide representative-anchored alignments
+- Scalable to large comparative satellitome datasets
 ---
 
 ###  Dependencies
@@ -200,19 +222,31 @@ bash satDNA_density.sh
 ---
 
 ### Output Files
-For an input file named `satellitome.fasta`, the script generates:
+### Family-level Outputs
 
-- `satellitome.id80.family_reps.fasta`  
-  FASTA file containing **one representative sequence per satDNA family**
+Each family generates a set of files including:
 
-- `satellitome.id80.families.tsv`  
-  Tabular file describing family membership
+#### Original family members
 
-- `satellitome.id80.proof.txt`  
-  Alignment proofs documenting **why sequences were grouped as variants**
 
-- `satellitome.id80.superfamilies.tsv`  
-  Pairwise superfamily relationships (homology without collapsing sequences)
+Family_000001_AmeSat01.members.fasta
+
+Contains all original monomers assigned to the family.
+
+Frame-corrected monomers
+Family_000001_AmeSat01.frame_corrected_monomers.fasta
+
+All family members are rotated and oriented relative to the family representative while preserving their original monomer length.
+
+Pairwise representative-member alignments
+Family_000001_AmeSat01.pairwise_to_first_representative.fasta
+
+Contains pairwise alignments between the family representative and each family member.
+
+Representative-anchored family alignment
+Family_000001_AmeSat01.firstseq_reference_anchored_alignment.fasta
+
+Family-wide alignment generated after circular phase correction, suitable for visualization in Geneious, AliView, Jalview and related software.
 
 ---
 

@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-
-Dependência opcional para acelerar:
-  pip install parasail
-
-Se parasail não estiver instalado, o script usa fallback em Python puro.
-"""
-
 import os
 import time
 from collections import defaultdict
@@ -362,7 +354,12 @@ def best_direction_alignment(A: str, B: str) -> Tuple[float, str, str, str]:
 
 
 def _py_semiglobal_alignment_with_ref_coords(A: str, B2: str) -> Tuple[float, str, str, int, int]:
+    """
+    Semiglobal A contra B2 retornando também as coordenadas no alvo B2.
 
+    ref_start/ref_end são coordenadas 0-based half-open em B2 para a região do
+    alvo usada no alinhamento de A. Isso permite recuperar a rotação circular.
+    """
     n = len(A)
     m = len(B2)
     real_b_len = m // 2
@@ -436,7 +433,15 @@ def _py_semiglobal_alignment_with_ref_coords(A: str, B2: str) -> Tuple[float, st
 
 
 def best_direction_alignment_with_member_rotation(reference: str, member: str) -> Tuple[float, str, str, str, int, str]:
-    
+    """
+    Alinha reference contra member+member e contra revcomp(member)+revcomp(member).
+
+    Retorna:
+      identity, orientation, aln_reference, aln_member, rotation_start, rotated_member
+
+    rotated_member é o monômero inteiro do membro, orientado e rotacionado para
+    iniciar no frame que melhor alinha contra o primeiro nucleotídeo do representante.
+    """
     if not member:
         return 0.0, "forward", reference, "", 0, member
 
@@ -463,6 +468,7 @@ def best_direction_alignment_with_member_rotation(reference: str, member: str) -
 
 
 def rotate(seq: str, start: int) -> str:
+    """Rotaciona uma sequência circular para iniciar em `start` (0-based)."""
     if not seq:
         return seq
     start %= len(seq)
@@ -474,6 +480,7 @@ def score_pair(a: str, b: str) -> int:
 
 
 def nw_global_align(A: str, B: str) -> Tuple[int, str, str]:
+    """Needleman-Wunsch global com gap linear. Usado após corrigir o frame circular."""
     n, m = len(A), len(B)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
     tb = [[0] * (m + 1) for _ in range(n + 1)]  # 1 diag, 2 up, 3 left
@@ -525,7 +532,12 @@ def nw_global_align(A: str, B: str) -> Tuple[int, str, str]:
 
 
 def semi_global_ref_to_dimer(reference: str, member_dimer: str) -> Tuple[int, str, str, int, int]:
+    """
+    Alinha a representante completa contra qualquer sub-região do membro dimerizado.
 
+    A representante é penalizada ponta-a-ponta. As pontas livres do membro dimerizado
+    permitem encontrar o melhor frame circular sem forçar alinhamento contra o dímero todo.
+    """
     n, m = len(reference), len(member_dimer)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
     tb = [[0] * (m + 1) for _ in range(n + 1)]
@@ -599,7 +611,15 @@ def identity_from_alignment(alnA: str, alnB: str, denom: int) -> float:
 
 
 def best_frame_against_first(rep_seq: str, member_seq: str) -> Dict[str, object]:
+    """
+    Encontra o melhor frame circular do membro contra a primeira sequência da família.
 
+    1. Testa forward e reverse-complement.
+    2. Dimeriza temporariamente o membro orientado.
+    3. Alinha a representante contra o dímero para obter o frame.
+    4. Rotaciona o membro de volta para um único monômero.
+    5. Faz alinhamento global representante × monômero rotacionado, com gaps.
+    """
     if not member_seq:
         _, aln_rep, aln_mem = nw_global_align(rep_seq, member_seq)
         return {
@@ -641,7 +661,13 @@ def best_frame_against_first(rep_seq: str, member_seq: str) -> Dict[str, object]
 
 
 def pairwise_to_reference_slots(aln_ref: str, aln_member: str, rep_len: int):
+    """
+    Converte um alinhamento par-a-par para slots por coordenada da representante.
 
+    insertions[-1] = inserções antes da primeira base da representante.
+    insertions[p] = inserções depois da posição p da representante.
+    bases[p] = base/gap do membro alinhada à posição p da representante.
+    """
     insertions = {i: [] for i in range(-1, rep_len)}
     bases = ["-"] * rep_len
     ref_pos = -1
@@ -658,7 +684,11 @@ def pairwise_to_reference_slots(aln_ref: str, aln_member: str, rep_len: int):
 
 
 def build_reference_anchored_msa(rep_id: str, rep_seq: str, aligned_members: List[Dict[str, object]]) -> List[Tuple[str, str]]:
-
+    """
+    Junta os alinhamentos par-a-par contra a mesma representante em um alinhamento
+    ancorado. Pode ficar largo em famílias divergentes, mas preserva a representante
+    como sistema de coordenadas comum.
+    """
     rep_len = len(rep_seq)
     member_slots = []
     max_ins = {i: 0 for i in range(-1, rep_len)}
@@ -698,7 +728,12 @@ def choose_family_medoid(
     cache: Dict[Tuple[int, int], Tuple[float, float, str, float, str]],
     alignments_counter: List[int],
 ) -> int:
+    """
+    Escolhe o representante/medoide da família.
 
+    Medoide = membro com maior identidade recíproca média contra os demais.
+    Desempates: maior comprimento, depois ID lexicograficamente menor.
+    """
     if len(members) == 1:
         return members[0]
 
@@ -764,7 +799,7 @@ def ask_user() -> Tuple[str, float]:
     fasta = os.path.expanduser(fasta)
 
     identity = float(input(
-        "Threshold (ex: 0.80 = 80%) [0.80]: "
+        "Threshold mínimo de identidade (ex: 0.80 = 80%) [0.80]: "
     ).strip() or "0.80")
 
     return fasta, identity
@@ -819,7 +854,13 @@ def families_pass_all_vs_all(
     cache: Dict[Tuple[int, int], Tuple[float, float, str, float, str]],
     alignments_counter: List[int],
 ) -> bool:
+    """
+    Complete-linkage real para fusão de famílias.
 
+    A fusão só é permitida se cada membro de A passa o threshold contra cada
+    membro de B. Não excluímos i/j aqui. O cache impede recalcular pares já
+    avaliados.
+    """
     for a in members_a:
         for b in members_b:
             if a == b:
@@ -879,7 +920,33 @@ def write_family_alignment_outputs(
     cache: Dict[Tuple[int, int], Tuple[float, float, str, float, str]],
     alignments_counter: List[int],
 ) -> Tuple[int, int, int, int]:
+    """
+    Gera arquivos por família usando a lógica definida com a Tarja/Rodrigo:
 
+    - A primeira sequência da família no FASTA de entrada é a representante fixa.
+    - A representante é tratada como monômero.
+    - Cada outro membro é temporariamente dimerizado, alinhado contra a representante,
+      orientado/rotacionado para o melhor frame circular e depois alinhado contra a
+      representante com gaps.
+
+    Outputs por família com pelo menos 2 membros:
+      1. *.members.fasta
+         FASTA bruto da família, na ordem original do FASTA de entrada.
+
+      2. *.frame_corrected_monomers.fasta
+         Monômeros orientados/rotacionados para o frame da primeira sequência, sem gaps.
+
+      3. *.pairwise_to_first_representative.fasta
+         Output principal para inspeção: pares representante × membro, com gaps.
+
+      4. *.firstseq_reference_anchored_alignment.fasta
+         Alinhamento ancorado na representante, fundindo os alinhamentos par-a-par.
+
+      5. *.alignment_summary.tsv
+         Metadados de orientação, rotação e identidade.
+
+    Famílias singleton são ignoradas nessa etapa para poupar tempo e espaço.
+    """
     os.makedirs(out_dir, exist_ok=True)
 
     family_files_written = 0
@@ -1002,11 +1069,584 @@ def write_family_alignment_outputs(
                 f"{anchored_fasta}\t{summary_tsv}\n"
             )
 
+
     return (
         family_files_written,
         frame_corrected_files_written,
         pairwise_files_written,
         anchored_files_written,
+    )
+
+
+def connected_components_from_edges(nodes: List[str], edges: List[Tuple[str, str]]) -> List[List[str]]:
+    """
+    Componentes conectados simples para a auditoria pós-clustering.
+
+    Importante: estes grupos NÃO substituem as famílias strict complete-linkage.
+    Eles servem apenas para apontar representantes de famílias diferentes que ainda
+    têm similaridade circular recíproca acima do threshold.
+    """
+    adj: Dict[str, Set[str]] = {node: set() for node in nodes}
+    for a, b in edges:
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+
+    visited: Set[str] = set()
+    components: List[List[str]] = []
+
+    for node in sorted(adj):
+        if node in visited:
+            continue
+        stack = [node]
+        visited.add(node)
+        comp = []
+        while stack:
+            x = stack.pop()
+            comp.append(x)
+            for y in adj.get(x, set()):
+                if y not in visited:
+                    visited.add(y)
+                    stack.append(y)
+        if len(comp) > 1:
+            components.append(sorted(comp))
+
+    components.sort(key=lambda c: (-len(c), c[0]))
+    return components
+
+
+def write_representative_redundancy_audit(
+    base: str,
+    pct: int,
+    sorted_families: List[Tuple[int, List[int]]],
+    ids: List[str],
+    seqs: List[str],
+    lens: List[int],
+    identity_threshold: float,
+) -> Tuple[str, str, str, str, int, int]:
+    """
+    Auditoria pós-clustering no nível de representantes de famílias.
+
+    Por que existe:
+      O clustering principal é strict complete-linkage. Portanto, duas famílias
+      podem permanecer separadas mesmo quando seus representantes parecem similares,
+      caso algum membro de uma família falhe contra algum membro da outra.
+
+      Além disso, o pré-filtro por k-mers pode deixar de enviar certos pares para
+      alinhamento durante o clustering principal. Esta auditoria evita esse ponto:
+      ela faz all-vs-all direto entre representantes de famílias, sem pré-filtro.
+
+    O que NÃO faz:
+      - Não funde famílias automaticamente.
+      - Não altera family_reps.fasta nem families.tsv.
+      - Não substitui o resultado strict complete-linkage.
+
+    Saídas:
+      <base>.idXX.rep_redundancy.tsv
+      <base>.idXX.rep_redundancy.groups.tsv
+      <base>.idXX.rep_redundancy.groups.txt
+      <base>.idXX.rep_redundancy.alignments.fasta
+    """
+    out_pairs = f"{base}.id{pct}.rep_redundancy.tsv"
+    out_groups_tsv = f"{base}.id{pct}.rep_redundancy.groups.tsv"
+    out_groups_txt = f"{base}.id{pct}.rep_redundancy.groups.txt"
+    out_alignments = f"{base}.id{pct}.rep_redundancy.alignments.fasta"
+
+    # Mantém a mesma regra usada para family_reps.fasta e families.tsv.
+    reps_info = []
+    for family_rank, (_fid, members) in enumerate(sorted_families, 1):
+        rep = min(members, key=lambda x: ids[x])
+        reps_info.append({
+            "family_rank": family_rank,
+            "family_id": ids[rep],
+            "rep_index": rep,
+            "rep_id": ids[rep],
+            "rep_len": lens[rep],
+            "family_size": len(members),
+        })
+
+    nodes = [d["family_id"] for d in reps_info]
+    edges: List[Tuple[str, str]] = []
+    hit_rows = []
+    alignment_records: List[Tuple[str, str]] = []
+
+    total_pairs = len(reps_info) * (len(reps_info) - 1) // 2
+    checked = 0
+    t_start = time.time()
+
+    print("\nAuditoria pós-clustering: all-vs-all entre representantes de famílias...")
+    print(f"Representantes: {len(reps_info)} | pares a testar: {total_pairs}")
+
+    for i in range(len(reps_info)):
+        a = reps_info[i]
+        ai = a["rep_index"]
+        for j in range(i + 1, len(reps_info)):
+            b = reps_info[j]
+            bi = b["rep_index"]
+            checked += 1
+
+            if checked % 5000 == 0:
+                elapsed = time.time() - t_start
+                print(f"  Rep-audit: {checked}/{total_pairs} pares | hits={len(hit_rows)} | elapsed={elapsed:.1f}s")
+
+            id_min, id_a_to_b, rel_a_to_b, id_b_to_a, rel_b_to_a = reciprocal_identity_only(seqs[ai], seqs[bi])
+
+            if id_min + 1e-12 >= identity_threshold:
+                edges.append((a["family_id"], b["family_id"]))
+                hit_rows.append({
+                    "family_A_rank": a["family_rank"],
+                    "family_B_rank": b["family_rank"],
+                    "family_A": a["family_id"],
+                    "family_B": b["family_id"],
+                    "rep_A": a["rep_id"],
+                    "rep_B": b["rep_id"],
+                    "rep_A_len": a["rep_len"],
+                    "rep_B_len": b["rep_len"],
+                    "family_A_size": a["family_size"],
+                    "family_B_size": b["family_size"],
+                    "reciprocal_identity_min": id_min,
+                    "A_to_B_identity": id_a_to_b,
+                    "A_to_B_orientation": rel_a_to_b,
+                    "B_to_A_identity": id_b_to_a,
+                    "B_to_A_orientation": rel_b_to_a,
+                })
+
+                id_ab, rel_ab, alnA_ab, alnB_ab = best_direction_alignment(seqs[ai], seqs[bi])
+                id_ba, rel_ba, alnB_ba, alnA_ba = best_direction_alignment(seqs[bi], seqs[ai])
+                pair_id = f"{sanitize_filename(a['rep_id'])}__VS__{sanitize_filename(b['rep_id'])}"
+                alignment_records.append((
+                    f"{pair_id}|A_to_B|A={a['rep_id']}|B={b['rep_id']}|identity={id_ab:.6f}|orientation={rel_ab}|role=A",
+                    alnA_ab,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|A_to_B|A={a['rep_id']}|B={b['rep_id']}|identity={id_ab:.6f}|orientation={rel_ab}|role=B_aligned_to_A",
+                    alnB_ab,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|B_to_A|A={b['rep_id']}|B={a['rep_id']}|identity={id_ba:.6f}|orientation={rel_ba}|role=B",
+                    alnB_ba,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|B_to_A|A={b['rep_id']}|B={a['rep_id']}|identity={id_ba:.6f}|orientation={rel_ba}|role=A_aligned_to_B",
+                    alnA_ba,
+                ))
+
+    hit_rows.sort(key=lambda d: (d["reciprocal_identity_min"], d["A_to_B_identity"], d["B_to_A_identity"]), reverse=True)
+
+    with open(out_pairs, "w", encoding="utf-8") as out:
+        out.write(
+            "family_A_rank\tfamily_B_rank\tfamily_A\tfamily_B\trep_A\trep_B\t"
+            "rep_A_len\trep_B_len\tfamily_A_size\tfamily_B_size\t"
+            "reciprocal_identity_min\tA_to_B_identity\tA_to_B_orientation\t"
+            "B_to_A_identity\tB_to_A_orientation\n"
+        )
+        for row in hit_rows:
+            out.write(
+                f"{row['family_A_rank']}\t{row['family_B_rank']}\t{row['family_A']}\t{row['family_B']}\t"
+                f"{row['rep_A']}\t{row['rep_B']}\t{row['rep_A_len']}\t{row['rep_B_len']}\t"
+                f"{row['family_A_size']}\t{row['family_B_size']}\t"
+                f"{row['reciprocal_identity_min']:.6f}\t{row['A_to_B_identity']:.6f}\t{row['A_to_B_orientation']}\t"
+                f"{row['B_to_A_identity']:.6f}\t{row['B_to_A_orientation']}\n"
+            )
+
+    components = connected_components_from_edges(nodes, edges)
+    comp_index: Dict[str, int] = {}
+    for group_id, comp in enumerate(components, 1):
+        for fam in comp:
+            comp_index[fam] = group_id
+
+    info_by_family = {d["family_id"]: d for d in reps_info}
+
+    with open(out_groups_tsv, "w", encoding="utf-8") as out:
+        out.write("rep_redundancy_group\tfamily_id\tfamily_rank\trep_id\trep_len\tfamily_size\n")
+        for group_id, comp in enumerate(components, 1):
+            for fam in comp:
+                d = info_by_family[fam]
+                out.write(
+                    f"RepRedundancyGroup_{group_id:06d}\t{fam}\t{d['family_rank']}\t"
+                    f"{d['rep_id']}\t{d['rep_len']}\t{d['family_size']}\n"
+                )
+
+    with open(out_groups_txt, "w", encoding="utf-8") as out:
+        out.write("# Representative-level redundancy audit\n")
+        out.write("# These groups are NOT automatic family merges.\n")
+        out.write("# They indicate family representatives with circular reciprocal identity >= threshold.\n")
+        out.write("# Use this file for manual curation or as candidate superfamily/redundancy evidence.\n\n")
+        out.write(f"# Threshold: {identity_threshold}\n")
+        out.write(f"# Representatives tested: {len(reps_info)}\n")
+        out.write(f"# Pairs tested: {total_pairs}\n")
+        out.write(f"# Redundant representative pairs: {len(hit_rows)}\n")
+        out.write(f"# Redundancy groups: {len(components)}\n\n")
+
+        if not components:
+            out.write("No representative-level redundancy groups detected.\n")
+        else:
+            hits_by_group: Dict[int, List[dict]] = defaultdict(list)
+            for row in hit_rows:
+                gid = comp_index.get(row["family_A"]) or comp_index.get(row["family_B"])
+                if gid is not None:
+                    hits_by_group[gid].append(row)
+
+            for group_id, comp in enumerate(components, 1):
+                out.write("=" * 100 + "\n")
+                out.write(f"RepRedundancyGroup-{group_id} (families={len(comp)}):\n")
+                for fam in comp:
+                    d = info_by_family[fam]
+                    out.write(
+                        f"  Family: {fam} | rank={d['family_rank']} | rep={d['rep_id']} | "
+                        f"rep_len={d['rep_len']} | family_size={d['family_size']}\n"
+                    )
+                out.write("\nEvidence pairs:\n")
+                for row in hits_by_group.get(group_id, []):
+                    out.write(
+                        f"  {row['family_A']} <-> {row['family_B']} | "
+                        f"min_id={row['reciprocal_identity_min']:.3f} | "
+                        f"A_to_B={row['A_to_B_identity']:.3f} ({row['A_to_B_orientation']}) | "
+                        f"B_to_A={row['B_to_A_identity']:.3f} ({row['B_to_A_orientation']}) | "
+                        f"len={row['rep_A_len']}:{row['rep_B_len']} | "
+                        f"family_size={row['family_A_size']}:{row['family_B_size']}\n"
+                    )
+                out.write("\n")
+
+    write_pairwise_alignment_fasta(out_alignments, alignment_records)
+
+    print(
+        f"Rep-audit concluído: hits={len(hit_rows)} | grupos={len(components)} | "
+        f"arquivos: {out_pairs}, {out_groups_txt}"
+    )
+
+    return out_pairs, out_groups_tsv, out_groups_txt, out_alignments, len(hit_rows), len(components)
+
+
+
+def merge_families_by_representative_similarity(
+    base: str,
+    pct: int,
+    sorted_families: List[Tuple[int, List[int]]],
+    ids: List[str],
+    seqs: List[str],
+    lens: List[int],
+    identity_threshold: float,
+) -> Tuple[List[Tuple[int, List[int]]], str, str, str, str, int, int, int, int]:
+    """
+    Etapa pós-clustering que tenta resgatar famílias redundantes usando os
+    representantes, MAS sem voltar ao problema de transitividade.
+
+    Diferença importante em relação à versão anterior:
+      - A versão anterior fazia componentes conectados entre representantes.
+        Isso recriava o problema A~B, B~C => A+B+C, mesmo que A não passasse
+        com C.
+      - Esta versão usa complete-linkage também no nível dos representantes.
+        Dois grupos de famílias só são fundidos se TODOS os representantes de
+        um grupo passarem o threshold contra TODOS os representantes do outro.
+
+    Regra:
+      1. Calcula um representante por família strict inicial usando a mesma
+         regra de family_reps.fasta: menor ID lexicográfico dentro da família.
+      2. Faz all-vs-all entre representantes, sem pré-filtro por k-mer.
+      3. Registra todos os pares de representantes com identidade circular
+         recíproca mínima >= threshold.
+      4. Tenta fundir grupos por complete-linkage entre representantes.
+      5. Os outputs finais do pipeline passam a ser baseados nas famílias após
+         esse merge conservador por representantes.
+
+    Saídas adicionais:
+      <base>.idXX.rep_merge_pairs.tsv
+      <base>.idXX.rep_merge.groups.tsv
+      <base>.idXX.rep_merge.groups.txt
+      <base>.idXX.rep_merge.alignments.fasta
+    """
+    out_pairs = f"{base}.id{pct}.rep_merge_pairs.tsv"
+    out_groups_tsv = f"{base}.id{pct}.rep_merge.groups.tsv"
+    out_groups_txt = f"{base}.id{pct}.rep_merge.groups.txt"
+    out_alignments = f"{base}.id{pct}.rep_merge.alignments.fasta"
+
+    reps_info = []
+    for family_rank, (fid, members) in enumerate(sorted_families, 1):
+        rep = min(members, key=lambda x: ids[x])
+        family_id = ids[rep]
+        reps_info.append({
+            "family_rank": family_rank,
+            "strict_fid": fid,
+            "family_id": family_id,
+            "rep_index": rep,
+            "rep_id": ids[rep],
+            "rep_len": lens[rep],
+            "family_size": len(members),
+            "members": list(members),
+        })
+
+    info_by_family = {d["family_id"]: d for d in reps_info}
+    pair_metrics: Dict[Tuple[str, str], dict] = {}
+    hit_rows: List[dict] = []
+    alignment_records: List[Tuple[str, str]] = []
+
+    def fam_pair_key(a: str, b: str) -> Tuple[str, str]:
+        return (a, b) if a <= b else (b, a)
+
+    total_pairs = len(reps_info) * (len(reps_info) - 1) // 2
+    checked = 0
+    t_start = time.time()
+
+    print("\nEtapa pós-clustering: auditoria/merge por representantes com complete-linkage...")
+    print(f"Representantes: {len(reps_info)} | pares a testar: {total_pairs}")
+
+    for i in range(len(reps_info)):
+        a = reps_info[i]
+        ai = a["rep_index"]
+        for j in range(i + 1, len(reps_info)):
+            b = reps_info[j]
+            bi = b["rep_index"]
+            checked += 1
+
+            if checked % 5000 == 0:
+                elapsed = time.time() - t_start
+                print(
+                    f"  Rep-audit: {checked}/{total_pairs} pares | "
+                    f"candidate_hits={len(hit_rows)} | elapsed={elapsed:.1f}s"
+                )
+
+            id_min, id_a_to_b, rel_a_to_b, id_b_to_a, rel_b_to_a = reciprocal_identity_only(seqs[ai], seqs[bi])
+
+            row = {
+                "family_A_rank": a["family_rank"],
+                "family_B_rank": b["family_rank"],
+                "family_A": a["family_id"],
+                "family_B": b["family_id"],
+                "rep_A": a["rep_id"],
+                "rep_B": b["rep_id"],
+                "rep_A_len": a["rep_len"],
+                "rep_B_len": b["rep_len"],
+                "family_A_size": a["family_size"],
+                "family_B_size": b["family_size"],
+                "reciprocal_identity_min": id_min,
+                "A_to_B_identity": id_a_to_b,
+                "A_to_B_orientation": rel_a_to_b,
+                "B_to_A_identity": id_b_to_a,
+                "B_to_A_orientation": rel_b_to_a,
+                "passes_threshold": id_min + 1e-12 >= identity_threshold,
+            }
+            pair_metrics[fam_pair_key(a["family_id"], b["family_id"])] = row
+
+            if row["passes_threshold"]:
+                hit_rows.append(row)
+
+                id_ab, rel_ab, alnA_ab, alnB_ab = best_direction_alignment(seqs[ai], seqs[bi])
+                id_ba, rel_ba, alnB_ba, alnA_ba = best_direction_alignment(seqs[bi], seqs[ai])
+                pair_id = f"{sanitize_filename(a['rep_id'])}__VS__{sanitize_filename(b['rep_id'])}"
+                alignment_records.append((
+                    f"{pair_id}|A_to_B|A={a['rep_id']}|B={b['rep_id']}|identity={id_ab:.6f}|orientation={rel_ab}|role=A",
+                    alnA_ab,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|A_to_B|A={a['rep_id']}|B={b['rep_id']}|identity={id_ab:.6f}|orientation={rel_ab}|role=B_aligned_to_A",
+                    alnB_ab,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|B_to_A|A={b['rep_id']}|B={a['rep_id']}|identity={id_ba:.6f}|orientation={rel_ba}|role=B",
+                    alnB_ba,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|B_to_A|A={b['rep_id']}|B={a['rep_id']}|identity={id_ba:.6f}|orientation={rel_ba}|role=A_aligned_to_B",
+                    alnA_ba,
+                ))
+
+    hit_rows.sort(
+        key=lambda d: (d["reciprocal_identity_min"], d["A_to_B_identity"], d["B_to_A_identity"]),
+        reverse=True,
+    )
+
+    with open(out_pairs, "w", encoding="utf-8") as out:
+        out.write(
+            "family_A_rank\tfamily_B_rank\tfamily_A\tfamily_B\trep_A\trep_B\t"
+            "rep_A_len\trep_B_len\tfamily_A_size\tfamily_B_size\t"
+            "reciprocal_identity_min\tA_to_B_identity\tA_to_B_orientation\t"
+            "B_to_A_identity\tB_to_A_orientation\tpasses_threshold\n"
+        )
+        for row in hit_rows:
+            out.write(
+                f"{row['family_A_rank']}\t{row['family_B_rank']}\t{row['family_A']}\t{row['family_B']}\t"
+                f"{row['rep_A']}\t{row['rep_B']}\t{row['rep_A_len']}\t{row['rep_B_len']}\t"
+                f"{row['family_A_size']}\t{row['family_B_size']}\t"
+                f"{row['reciprocal_identity_min']:.6f}\t{row['A_to_B_identity']:.6f}\t{row['A_to_B_orientation']}\t"
+                f"{row['B_to_A_identity']:.6f}\t{row['B_to_A_orientation']}\t1\n"
+            )
+
+    # ------------------------------------------------------------------
+    # Merge conservador: complete-linkage entre representantes.
+    # ------------------------------------------------------------------
+    rep_families = [d["family_id"] for d in reps_info]
+    groups: List[List[str]] = [[fam] for fam in rep_families]
+
+    def find_group_index(fam: str) -> int:
+        for idx, group in enumerate(groups):
+            if fam in group:
+                return idx
+        raise KeyError(fam)
+
+    def groups_pass_complete_linkage(group_a: List[str], group_b: List[str]) -> bool:
+        for fam_a in group_a:
+            for fam_b in group_b:
+                if fam_a == fam_b:
+                    continue
+                row = pair_metrics.get(fam_pair_key(fam_a, fam_b))
+                if row is None or not row["passes_threshold"]:
+                    return False
+        return True
+
+    accepted_merge_edges: List[Tuple[str, str]] = []
+    rejected_transitive_edges: List[Tuple[str, str]] = []
+
+    # Processa os pares mais fortes primeiro. A diferença é que um par só funde
+    # grupos se todos os demais representantes dos dois grupos também passarem.
+    for row in hit_rows:
+        fam_a = row["family_A"]
+        fam_b = row["family_B"]
+        ga = find_group_index(fam_a)
+        gb = find_group_index(fam_b)
+        if ga == gb:
+            continue
+
+        group_a = groups[ga]
+        group_b = groups[gb]
+        if groups_pass_complete_linkage(group_a, group_b):
+            accepted_merge_edges.append((fam_a, fam_b))
+            merged = sorted(set(group_a + group_b), key=lambda fam: info_by_family[fam]["family_rank"])
+            # remove índices em ordem decrescente para não bagunçar a lista
+            for idx in sorted([ga, gb], reverse=True):
+                del groups[idx]
+            groups.append(merged)
+        else:
+            rejected_transitive_edges.append((fam_a, fam_b))
+
+    components = [g for g in groups if len(g) > 1]
+    components.sort(key=lambda comp: (-len(comp), min(info_by_family[f]["family_rank"] for f in comp)))
+
+    comp_index: Dict[str, int] = {}
+    for group_id, comp in enumerate(components, 1):
+        for fam in comp:
+            comp_index[fam] = group_id
+
+    with open(out_groups_tsv, "w", encoding="utf-8") as out:
+        out.write(
+            "rep_merge_group\told_family_id\told_family_rank\told_rep_id\told_rep_len\t"
+            "old_family_size\tnew_family_id\tnew_family_size\n"
+        )
+        for group_id, comp in enumerate(components, 1):
+            merged_members: List[int] = []
+            for fam in comp:
+                merged_members.extend(info_by_family[fam]["members"])
+            merged_members = sorted(set(merged_members))
+            new_rep = min(merged_members, key=lambda x: ids[x])
+            new_family_id = ids[new_rep]
+            new_family_size = len(merged_members)
+            for fam in comp:
+                d = info_by_family[fam]
+                out.write(
+                    f"RepMergeGroup_{group_id:06d}\t{fam}\t{d['family_rank']}\t"
+                    f"{d['rep_id']}\t{d['rep_len']}\t{d['family_size']}\t"
+                    f"{new_family_id}\t{new_family_size}\n"
+                )
+
+    with open(out_groups_txt, "w", encoding="utf-8") as out:
+        out.write("# Representative-level conservative family merging\n")
+        out.write("# Families listed in the same RepMergeGroup were automatically merged.\n")
+        out.write("# Criterion: complete-linkage among family representatives.\n")
+        out.write("# This avoids transitive chains such as A~B and B~C merging A+B+C when A~C fails.\n\n")
+        out.write(f"# Threshold: {identity_threshold}\n")
+        out.write(f"# Strict families before representative merge: {len(sorted_families)}\n")
+        out.write(f"# Representatives tested: {len(reps_info)}\n")
+        out.write(f"# Pairs tested: {total_pairs}\n")
+        out.write(f"# Representative pairs passing threshold: {len(hit_rows)}\n")
+        out.write(f"# Accepted complete-linkage merge edges: {len(accepted_merge_edges)}\n")
+        out.write(f"# Rejected transitive/non-complete edges: {len(rejected_transitive_edges)}\n")
+        out.write(f"# Merge groups accepted: {len(components)}\n\n")
+
+        if not components:
+            out.write("No representative-level complete-linkage merge groups detected. Final families remain unchanged.\n")
+        else:
+            hits_by_group: Dict[int, List[dict]] = defaultdict(list)
+            for row in hit_rows:
+                gid_a = comp_index.get(row["family_A"])
+                gid_b = comp_index.get(row["family_B"])
+                if gid_a is not None and gid_a == gid_b:
+                    hits_by_group[gid_a].append(row)
+
+            for group_id, comp in enumerate(components, 1):
+                merged_members: List[int] = []
+                for fam in comp:
+                    merged_members.extend(info_by_family[fam]["members"])
+                merged_members = sorted(set(merged_members))
+                new_rep = min(merged_members, key=lambda x: ids[x])
+                out.write("=" * 100 + "\n")
+                out.write(
+                    f"RepMergeGroup-{group_id} | old_families={len(comp)} | "
+                    f"new_family_id={ids[new_rep]} | new_family_size={len(merged_members)}\n"
+                )
+                for fam in comp:
+                    d = info_by_family[fam]
+                    out.write(
+                        f"  Old family: {fam} | rank={d['family_rank']} | rep={d['rep_id']} | "
+                        f"rep_len={d['rep_len']} | family_size={d['family_size']}\n"
+                    )
+                out.write("\nEvidence pairs within accepted group:\n")
+                for row in hits_by_group.get(group_id, []):
+                    out.write(
+                        f"  {row['family_A']} <-> {row['family_B']} | "
+                        f"min_id={row['reciprocal_identity_min']:.3f} | "
+                        f"A_to_B={row['A_to_B_identity']:.3f} ({row['A_to_B_orientation']}) | "
+                        f"B_to_A={row['B_to_A_identity']:.3f} ({row['B_to_A_orientation']}) | "
+                        f"len={row['rep_A_len']}:{row['rep_B_len']} | "
+                        f"family_size={row['family_A_size']}:{row['family_B_size']}\n"
+                    )
+                out.write("\n")
+
+    write_pairwise_alignment_fasta(out_alignments, alignment_records)
+
+    # Aplica a fusão conservative-complete-linkage.
+    used_families: Set[str] = set()
+    merged_groups: Dict[str, List[int]] = {}
+
+    for group_id, comp in enumerate(components, 1):
+        merged_members: List[int] = []
+        for fam in comp:
+            merged_members.extend(info_by_family[fam]["members"])
+            used_families.add(fam)
+        merged_members = sorted(set(merged_members))
+        new_rep = min(merged_members, key=lambda x: ids[x])
+        merged_groups[f"merged_{group_id}_{ids[new_rep]}"] = merged_members
+
+    for d in reps_info:
+        fam = d["family_id"]
+        if fam in used_families:
+            continue
+        merged_groups[f"single_{fam}"] = sorted(set(d["members"]))
+
+    merged_final_families: Dict[int, List[int]] = {}
+    for members in merged_groups.values():
+        rep = min(members, key=lambda x: ids[x])
+        merged_final_families[rep] = sorted(set(members))
+
+    merged_sorted_families = sorted(merged_final_families.items(), key=lambda item: len(item[1]), reverse=True)
+
+    old_family_count = len(sorted_families)
+    new_family_count = len(merged_sorted_families)
+
+    print(
+        f"Rep-merge complete-linkage concluído: candidate_pairs={len(hit_rows)} | "
+        f"accepted_groups={len(components)} | famílias strict={old_family_count} -> "
+        f"famílias finais={new_family_count} | arquivos: {out_pairs}, {out_groups_txt}"
+    )
+
+    return (
+        merged_sorted_families,
+        out_pairs,
+        out_groups_tsv,
+        out_groups_txt,
+        out_alignments,
+        len(hit_rows),
+        len(components),
+        old_family_count,
+        new_family_count,
     )
 
 def run(fasta: str, identity_threshold: float) -> None:
@@ -1217,6 +1857,26 @@ def run(fasta: str, identity_threshold: float) -> None:
     base = os.path.splitext(fasta)[0]
     pct = int(identity_threshold * 100)
 
+    (
+        sorted_families,
+        out_rep_merge_pairs,
+        out_rep_merge_groups_tsv,
+        out_rep_merge_groups_txt,
+        out_rep_merge_alignments,
+        rep_merge_pairs,
+        rep_merge_groups,
+        strict_family_count_before_rep_merge,
+        final_family_count_after_rep_merge,
+    ) = merge_families_by_representative_similarity(
+        base,
+        pct,
+        sorted_families,
+        ids,
+        seqs,
+        lens,
+        identity_threshold,
+    )
+
     out_fasta = f"{base}.id{pct}.family_reps.fasta"
     out_tsv = f"{base}.id{pct}.families.tsv"
     out_report = f"{base}.id{pct}.proof.txt"
@@ -1370,6 +2030,12 @@ def run(fasta: str, identity_threshold: float) -> None:
     report.append(f"# Superfamily links: {out_super}")
     report.append(f"# Superfamily groups: {out_super_groups}")
     report.append(f"# Family FASTA/alignment directory: {out_family_fastas_dir}")
+    report.append(f"# Strict families before representative merge: {strict_family_count_before_rep_merge}")
+    report.append(f"# Final families after representative merge: {final_family_count_after_rep_merge}")
+    report.append(f"# Representative merge pairs: {out_rep_merge_pairs}")
+    report.append(f"# Representative merge groups TSV: {out_rep_merge_groups_tsv}")
+    report.append(f"# Representative merge groups TXT: {out_rep_merge_groups_txt}")
+    report.append(f"# Representative merge alignments: {out_rep_merge_alignments}")
     report.append("")
 
     for fid, members in sorted_families:
@@ -1428,6 +2094,13 @@ def run(fasta: str, identity_threshold: float) -> None:
     print(f"SUPERFAMS:               {out_super}")
     print(f"SF_GROUPS:               {out_super_groups}")
     print(f"FAMILY_FASTAS_DIR:       {out_family_fastas_dir}")
+    print(f"Strict families before rep-merge: {strict_family_count_before_rep_merge}")
+    print(f"Final families after rep-merge:   {final_family_count_after_rep_merge}")
+    print(f"REP_MERGE_PAIRS:         {out_rep_merge_pairs}")
+    print(f"REP_MERGE_GROUPS:        {out_rep_merge_groups_txt}")
+    print(f"REP_MERGE_ALNS:          {out_rep_merge_alignments}")
+    print(f"Rep merge pairs:         {rep_merge_pairs}")
+    print(f"Rep merge groups:        {rep_merge_groups}")
     print(f"Family member FASTAs:    {family_files_written}")
     print(f"Frame-corrected FASTAs:  {frame_corrected_files_written}")
     print(f"Pairwise-to-first FASTAs:{pairwise_files_written}")

@@ -1649,6 +1649,334 @@ def merge_families_by_representative_similarity(
         new_family_count,
     )
 
+
+def merge_families_by_exhaustive_member_similarity(
+    base: str,
+    pct: int,
+    sorted_families: List[Tuple[int, List[int]]],
+    ids: List[str],
+    seqs: List[str],
+    lens: List[int],
+    identity_threshold: float,
+    cache: Dict[Tuple[int, int], Tuple[float, float, str, float, str]],
+    alignments_counter: List[int],
+) -> Tuple[List[Tuple[int, List[int]]], str, str, str, str, int, int, int, int]:
+    """
+    RESGATE FINAL EXAUSTIVO, sem pré-filtro por k-mer e sem depender apenas dos representantes.
+
+    Por que esta etapa existe:
+      O clustering inicial usa pré-filtro por k-mers para ficar rápido. Isso pode deixar de mandar
+      alguns pares verdadeiramente similares para alinhamento. Além disso, um resgate apenas entre
+      representantes de família também pode falhar quando o par >= threshold envolve dois membros que
+      não são os representantes escolhidos.
+
+    Regra desta etapa:
+      1. Parte das famílias strict/complete-linkage obtidas no clustering inicial.
+      2. Compara TODO membro de uma família contra TODO membro de outra família.
+      3. Não usa pré-filtro por k-mer.
+      4. Se qualquer par entre duas famílias tiver identidade circular recíproca mínima >= threshold,
+         cria uma aresta de resgate entre essas famílias.
+      5. Famílias ligadas por essas arestas são fundidas como componentes conectados.
+
+    Interpretação:
+      Esta etapa é deliberadamente equivalente à curadoria manual: se você encontrou dois monômeros
+      de famílias diferentes com >=80% de similaridade recíproca circular, eles passam a ser reunidos.
+      O arquivo *.exhaustive_rescue_pairs.tsv guarda exatamente quais pares justificaram a fusão.
+
+    Saídas:
+      <base>.idXX.exhaustive_rescue_pairs.tsv
+      <base>.idXX.exhaustive_rescue.groups.tsv
+      <base>.idXX.exhaustive_rescue.groups.txt
+      <base>.idXX.exhaustive_rescue.alignments.fasta
+    """
+    out_pairs = f"{base}.id{pct}.exhaustive_rescue_pairs.tsv"
+    out_groups_tsv = f"{base}.id{pct}.exhaustive_rescue.groups.tsv"
+    out_groups_txt = f"{base}.id{pct}.exhaustive_rescue.groups.txt"
+    out_alignments = f"{base}.id{pct}.exhaustive_rescue.alignments.fasta"
+
+    old_family_count = len(sorted_families)
+
+    # Cria IDs estáveis para as famílias strict iniciais.
+    strict_infos = []
+    for family_rank, (fid, members) in enumerate(sorted_families, 1):
+        ordered_members = sorted(set(members))
+        rep = min(ordered_members, key=lambda x: ids[x])
+        strict_infos.append({
+            "strict_rank": family_rank,
+            "strict_fid": fid,
+            "family_id": ids[rep],
+            "rep_index": rep,
+            "rep_id": ids[rep],
+            "members": ordered_members,
+            "family_size": len(ordered_members),
+        })
+
+    info_by_family = {d["family_id"]: d for d in strict_infos}
+    family_ids = [d["family_id"] for d in strict_infos]
+    id_to_index = {seq_id: idx for idx, seq_id in enumerate(ids)}
+
+    # União-e-busca para componentes de resgate.
+    parent = {fam: fam for fam in family_ids}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra = find(a)
+        rb = find(b)
+        if ra == rb:
+            return
+        # Mantém como raiz a família de menor rank para estabilidade.
+        rank_ra = info_by_family[ra]["strict_rank"]
+        rank_rb = info_by_family[rb]["strict_rank"]
+        if rank_ra <= rank_rb:
+            parent[rb] = ra
+        else:
+            parent[ra] = rb
+
+    total_family_pairs = old_family_count * (old_family_count - 1) // 2
+    checked_family_pairs = 0
+    checked_member_pairs = 0
+    rescue_rows: List[dict] = []
+    alignment_records: List[Tuple[str, str]] = []
+    t_start = time.time()
+
+    print("\nResgate final exaustivo: all-vs-all entre membros de famílias diferentes...")
+    print(f"Famílias strict iniciais: {old_family_count} | pares de famílias: {total_family_pairs}")
+    print("Sem pré-filtro por k-mer; esta é a etapa que replica a curadoria manual.")
+
+    for a_i in range(len(strict_infos)):
+        fam_a = strict_infos[a_i]
+        for b_i in range(a_i + 1, len(strict_infos)):
+            fam_b = strict_infos[b_i]
+            checked_family_pairs += 1
+
+            if checked_family_pairs % 100 == 0:
+                elapsed = time.time() - t_start
+                print(
+                    f"  Rescue: {checked_family_pairs}/{total_family_pairs} pares de famílias | "
+                    f"pares de membros={checked_member_pairs} | hits={len(rescue_rows)} | elapsed={elapsed:.1f}s"
+                )
+
+            best_row = None
+
+            # Testa todos os membros, sem k-mer prefilter. Ordenar por tamanho próximo primeiro
+            # só ajuda a encontrar hits cedo, mas não muda o resultado.
+            member_pairs = []
+            for ma in fam_a["members"]:
+                for mb in fam_b["members"]:
+                    member_pairs.append((abs(lens[ma] - lens[mb]), ma, mb))
+            member_pairs.sort(key=lambda x: x[0])
+
+            for _len_diff, ma, mb in member_pairs:
+                checked_member_pairs += 1
+                id_min, id_a_to_b, rel_a_to_b, id_b_to_a, rel_b_to_a = get_reciprocal_identity_cached(
+                    ma,
+                    mb,
+                    seqs,
+                    cache,
+                    alignments_counter,
+                )
+
+                if id_min + 1e-12 >= identity_threshold:
+                    row = {
+                        "strict_family_A_rank": fam_a["strict_rank"],
+                        "strict_family_B_rank": fam_b["strict_rank"],
+                        "strict_family_A": fam_a["family_id"],
+                        "strict_family_B": fam_b["family_id"],
+                        "strict_family_A_size": fam_a["family_size"],
+                        "strict_family_B_size": fam_b["family_size"],
+                        "member_A": ids[ma],
+                        "member_B": ids[mb],
+                        "member_A_len": lens[ma],
+                        "member_B_len": lens[mb],
+                        "reciprocal_identity_min": id_min,
+                        "A_to_B_identity": id_a_to_b,
+                        "A_to_B_orientation": rel_a_to_b,
+                        "B_to_A_identity": id_b_to_a,
+                        "B_to_A_orientation": rel_b_to_a,
+                    }
+                    if best_row is None or (
+                        row["reciprocal_identity_min"], row["A_to_B_identity"], row["B_to_A_identity"]
+                    ) > (
+                        best_row["reciprocal_identity_min"], best_row["A_to_B_identity"], best_row["B_to_A_identity"]
+                    ):
+                        best_row = row
+                    # Não damos break: queremos registrar o melhor par que justifica a fusão.
+
+            if best_row is not None:
+                rescue_rows.append(best_row)
+                union(fam_a["family_id"], fam_b["family_id"])
+
+                ma_id = best_row["member_A"]
+                mb_id = best_row["member_B"]
+                ma = id_to_index[ma_id]
+                mb = id_to_index[mb_id]
+                id_ab, rel_ab, alnA_ab, alnB_ab = best_direction_alignment(seqs[ma], seqs[mb])
+                id_ba, rel_ba, alnB_ba, alnA_ba = best_direction_alignment(seqs[mb], seqs[ma])
+                pair_id = f"{sanitize_filename(ma_id)}__VS__{sanitize_filename(mb_id)}"
+                alignment_records.append((
+                    f"{pair_id}|A_to_B|A={ma_id}|B={mb_id}|identity={id_ab:.6f}|orientation={rel_ab}|role=A",
+                    alnA_ab,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|A_to_B|A={ma_id}|B={mb_id}|identity={id_ab:.6f}|orientation={rel_ab}|role=B_aligned_to_A",
+                    alnB_ab,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|B_to_A|A={mb_id}|B={ma_id}|identity={id_ba:.6f}|orientation={rel_ba}|role=B",
+                    alnB_ba,
+                ))
+                alignment_records.append((
+                    f"{pair_id}|B_to_A|A={mb_id}|B={ma_id}|identity={id_ba:.6f}|orientation={rel_ba}|role=A_aligned_to_B",
+                    alnA_ba,
+                ))
+
+    rescue_rows.sort(
+        key=lambda d: (d["reciprocal_identity_min"], d["A_to_B_identity"], d["B_to_A_identity"]),
+        reverse=True,
+    )
+
+    with open(out_pairs, "w", encoding="utf-8") as out:
+        out.write(
+            "strict_family_A_rank\tstrict_family_B_rank\tstrict_family_A\tstrict_family_B\t"
+            "strict_family_A_size\tstrict_family_B_size\tmember_A\tmember_B\tmember_A_len\tmember_B_len\t"
+            "reciprocal_identity_min\tA_to_B_identity\tA_to_B_orientation\t"
+            "B_to_A_identity\tB_to_A_orientation\n"
+        )
+        for row in rescue_rows:
+            out.write(
+                f"{row['strict_family_A_rank']}\t{row['strict_family_B_rank']}\t"
+                f"{row['strict_family_A']}\t{row['strict_family_B']}\t"
+                f"{row['strict_family_A_size']}\t{row['strict_family_B_size']}\t"
+                f"{row['member_A']}\t{row['member_B']}\t{row['member_A_len']}\t{row['member_B_len']}\t"
+                f"{row['reciprocal_identity_min']:.6f}\t{row['A_to_B_identity']:.6f}\t{row['A_to_B_orientation']}\t"
+                f"{row['B_to_A_identity']:.6f}\t{row['B_to_A_orientation']}\n"
+            )
+
+    # Monta componentes finais.
+    components_by_root: Dict[str, List[str]] = defaultdict(list)
+    for fam in family_ids:
+        components_by_root[find(fam)].append(fam)
+
+    merged_components = [sorted(v, key=lambda fam: info_by_family[fam]["strict_rank"]) for v in components_by_root.values()]
+    merged_components.sort(key=lambda comp: min(info_by_family[f]["strict_rank"] for f in comp))
+    accepted_components = [comp for comp in merged_components if len(comp) > 1]
+
+    final_family_dict: Dict[int, List[int]] = {}
+    for comp in merged_components:
+        merged_members: List[int] = []
+        for fam in comp:
+            merged_members.extend(info_by_family[fam]["members"])
+        merged_members = sorted(set(merged_members))
+        rep = min(merged_members, key=lambda x: ids[x])
+        final_family_dict[rep] = merged_members
+
+    merged_sorted_families = sorted(final_family_dict.items(), key=lambda item: len(item[1]), reverse=True)
+    new_family_count = len(merged_sorted_families)
+
+    with open(out_groups_tsv, "w", encoding="utf-8") as out:
+        out.write(
+            "exhaustive_rescue_group\told_family_id\told_family_rank\told_family_size\t"
+            "new_family_id\tnew_family_size\n"
+        )
+        for group_id, comp in enumerate(accepted_components, 1):
+            merged_members: List[int] = []
+            for fam in comp:
+                merged_members.extend(info_by_family[fam]["members"])
+            merged_members = sorted(set(merged_members))
+            new_rep = min(merged_members, key=lambda x: ids[x])
+            new_family_id = ids[new_rep]
+            for fam in comp:
+                d = info_by_family[fam]
+                out.write(
+                    f"ExhaustiveRescueGroup_{group_id:06d}\t{fam}\t{d['strict_rank']}\t"
+                    f"{d['family_size']}\t{new_family_id}\t{len(merged_members)}\n"
+                )
+
+    rows_by_component: Dict[int, List[dict]] = defaultdict(list)
+    fam_to_group: Dict[str, int] = {}
+    for group_id, comp in enumerate(accepted_components, 1):
+        for fam in comp:
+            fam_to_group[fam] = group_id
+    for row in rescue_rows:
+        gid_a = fam_to_group.get(row["strict_family_A"])
+        gid_b = fam_to_group.get(row["strict_family_B"])
+        if gid_a is not None and gid_a == gid_b:
+            rows_by_component[gid_a].append(row)
+
+    with open(out_groups_txt, "w", encoding="utf-8") as out:
+        out.write("# Exhaustive post-clustering rescue\n")
+        out.write("# Families in the same group were merged after full all-vs-all member comparison.\n")
+        out.write("# Criterion: at least one member pair between strict families has circular reciprocal identity >= threshold.\n")
+        out.write("# No k-mer prefilter is used here. This step is meant to capture manual-curation-like cases.\n\n")
+        out.write(f"# Threshold: {identity_threshold}\n")
+        out.write(f"# Strict families before rescue: {old_family_count}\n")
+        out.write(f"# Final families after rescue: {new_family_count}\n")
+        out.write(f"# Family pairs checked: {checked_family_pairs}\n")
+        out.write(f"# Member pairs checked: {checked_member_pairs}\n")
+        out.write(f"# Rescue family-pair hits: {len(rescue_rows)}\n")
+        out.write(f"# Rescue groups accepted: {len(accepted_components)}\n\n")
+
+        if not accepted_components:
+            out.write("No exhaustive rescue groups detected. Final families remain unchanged.\n")
+        else:
+            for group_id, comp in enumerate(accepted_components, 1):
+                merged_members: List[int] = []
+                for fam in comp:
+                    merged_members.extend(info_by_family[fam]["members"])
+                merged_members = sorted(set(merged_members))
+                new_rep = min(merged_members, key=lambda x: ids[x])
+                out.write("=" * 100 + "\n")
+                out.write(
+                    f"ExhaustiveRescueGroup-{group_id} | old_families={len(comp)} | "
+                    f"new_family_id={ids[new_rep]} | new_family_size={len(merged_members)}\n"
+                )
+                for fam in comp:
+                    d = info_by_family[fam]
+                    out.write(
+                        f"  Old family: {fam} | rank={d['strict_rank']} | "
+                        f"size={d['family_size']} | rep={d['rep_id']}\n"
+                    )
+                out.write("\nBest evidence pairs between old families:\n")
+                for row in sorted(
+                    rows_by_component.get(group_id, []),
+                    key=lambda d: (d["reciprocal_identity_min"], d["A_to_B_identity"], d["B_to_A_identity"]),
+                    reverse=True,
+                ):
+                    out.write(
+                        f"  {row['strict_family_A']} <-> {row['strict_family_B']} | "
+                        f"members: {row['member_A']} <-> {row['member_B']} | "
+                        f"min_id={row['reciprocal_identity_min']:.3f} | "
+                        f"A_to_B={row['A_to_B_identity']:.3f} ({row['A_to_B_orientation']}) | "
+                        f"B_to_A={row['B_to_A_identity']:.3f} ({row['B_to_A_orientation']}) | "
+                        f"len={row['member_A_len']}:{row['member_B_len']}\n"
+                    )
+                out.write("\n")
+
+    write_pairwise_alignment_fasta(out_alignments, alignment_records)
+
+    print(
+        f"Resgate exaustivo concluído: family_pair_hits={len(rescue_rows)} | "
+        f"accepted_groups={len(accepted_components)} | famílias strict={old_family_count} -> "
+        f"famílias finais={new_family_count} | arquivos: {out_pairs}, {out_groups_txt}"
+    )
+
+    return (
+        merged_sorted_families,
+        out_pairs,
+        out_groups_tsv,
+        out_groups_txt,
+        out_alignments,
+        len(rescue_rows),
+        len(accepted_components),
+        old_family_count,
+        new_family_count,
+    )
+
 def run(fasta: str, identity_threshold: float) -> None:
     t0 = time.time()
 
@@ -1867,7 +2195,7 @@ def run(fasta: str, identity_threshold: float) -> None:
         rep_merge_groups,
         strict_family_count_before_rep_merge,
         final_family_count_after_rep_merge,
-    ) = merge_families_by_representative_similarity(
+    ) = merge_families_by_exhaustive_member_similarity(
         base,
         pct,
         sorted_families,
@@ -1875,6 +2203,8 @@ def run(fasta: str, identity_threshold: float) -> None:
         seqs,
         lens,
         identity_threshold,
+        identity_cache,
+        alignments_counter,
     )
 
     out_fasta = f"{base}.id{pct}.family_reps.fasta"
@@ -2032,10 +2362,10 @@ def run(fasta: str, identity_threshold: float) -> None:
     report.append(f"# Family FASTA/alignment directory: {out_family_fastas_dir}")
     report.append(f"# Strict families before representative merge: {strict_family_count_before_rep_merge}")
     report.append(f"# Final families after representative merge: {final_family_count_after_rep_merge}")
-    report.append(f"# Representative merge pairs: {out_rep_merge_pairs}")
-    report.append(f"# Representative merge groups TSV: {out_rep_merge_groups_tsv}")
-    report.append(f"# Representative merge groups TXT: {out_rep_merge_groups_txt}")
-    report.append(f"# Representative merge alignments: {out_rep_merge_alignments}")
+    report.append(f"# Exhaustive rescue pairs: {out_rep_merge_pairs}")
+    report.append(f"# Exhaustive rescue groups TSV: {out_rep_merge_groups_tsv}")
+    report.append(f"# Exhaustive rescue groups TXT: {out_rep_merge_groups_txt}")
+    report.append(f"# Exhaustive rescue alignments: {out_rep_merge_alignments}")
     report.append("")
 
     for fid, members in sorted_families:
@@ -2094,13 +2424,13 @@ def run(fasta: str, identity_threshold: float) -> None:
     print(f"SUPERFAMS:               {out_super}")
     print(f"SF_GROUPS:               {out_super_groups}")
     print(f"FAMILY_FASTAS_DIR:       {out_family_fastas_dir}")
-    print(f"Strict families before rep-merge: {strict_family_count_before_rep_merge}")
-    print(f"Final families after rep-merge:   {final_family_count_after_rep_merge}")
-    print(f"REP_MERGE_PAIRS:         {out_rep_merge_pairs}")
-    print(f"REP_MERGE_GROUPS:        {out_rep_merge_groups_txt}")
-    print(f"REP_MERGE_ALNS:          {out_rep_merge_alignments}")
-    print(f"Rep merge pairs:         {rep_merge_pairs}")
-    print(f"Rep merge groups:        {rep_merge_groups}")
+    print(f"Strict families before rescue: {strict_family_count_before_rep_merge}")
+    print(f"Final families after rescue:   {final_family_count_after_rep_merge}")
+    print(f"EXHAUSTIVE_RESCUE_PAIRS:         {out_rep_merge_pairs}")
+    print(f"EXHAUSTIVE_RESCUE_GROUPS:        {out_rep_merge_groups_txt}")
+    print(f"EXHAUSTIVE_RESCUE_ALNS:          {out_rep_merge_alignments}")
+    print(f"Exhaustive rescue pairs:         {rep_merge_pairs}")
+    print(f"Exhaustive rescue groups:        {rep_merge_groups}")
     print(f"Family member FASTAs:    {family_files_written}")
     print(f"Frame-corrected FASTAs:  {frame_corrected_files_written}")
     print(f"Pairwise-to-first FASTAs:{pairwise_files_written}")

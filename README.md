@@ -354,7 +354,7 @@ python3 monoMiner.py
 
 
 ---
-## run_satDNA_synteny.sh - Relationship between collinear blocks and satDNA arrays
+## run_satDNA_synteny.sh – Relationship between collinear blocks and satDNA arrays
 
 **satDNA-Synteny** is a lightweight pipeline for investigating the relationship between satellite DNA (satDNA) arrays and conserved collinear (syntenic) blocks identified from whole-genome comparisons.
 

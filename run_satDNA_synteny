@@ -1,0 +1,89 @@
+#!/bin/bash
+# satDNA-Synteny Pipeline
+#
+# Author: Francisco de Menezes Cavalcante Sassi; Rodrigo Zeni dos Santos
+#
+# This script:
+#   1. Builds genomic coordinates of collinear blocks from JCVI collinearity outputs
+#   2. Identifies satDNAs inside/outside collinear blocks
+#   3. Calculates distance to the nearest collinear block
+#   4. Generates summary heatmaps
+#
+# Requirements:
+#   Python >=3
+#   bedtools >=2.30
+#   R >=4.2
+# ============================================================
+
+set -e
+
+# Edit your species
+
+species=("Species1" "Species2" "Species3" "Species4")
+
+# Pipeline
+
+echo "======================================="
+echo "satDNA-Synteny Pipeline"
+echo "======================================="
+
+for sp in "${species[@]}"
+do
+
+    echo
+    echo "Processing ${sp}..."
+
+    #######################################################
+    # Step 1
+    #######################################################
+
+    python blocks_with_id.py \
+        ${sp}.bed \
+        ${sp}.anchors.simple \
+        ${sp}.blocks.id.bed
+
+    #######################################################
+    # Step 2
+    #######################################################
+
+    bedtools intersect \
+        -a ${sp}_sats.clean.bed \
+        -b ${sp}.blocks.id.bed \
+        -wa -u \
+        > ${sp}_inside.bed
+
+    bedtools intersect \
+        -a ${sp}_sats.clean.bed \
+        -b ${sp}.blocks.id.bed \
+        -v \
+        > ${sp}_outside.bed
+
+    #######################################################
+    # Step 3
+    #######################################################
+
+    sort -k1,1 -k2,2n ${sp}.blocks.id.bed \
+        > ${sp}.blocks.sorted.bed
+
+    sort -k1,1 -k2,2n ${sp}_sats.clean.bed \
+        > ${sp}_sats.sorted.bed
+
+    bedtools closest \
+        -a ${sp}_sats.sorted.bed \
+        -b ${sp}.blocks.sorted.bed \
+        -d \
+        > ${sp}.dist.txt
+
+done
+
+###########################################################
+# Step 4
+###########################################################
+
+echo
+echo "Generating heatmaps..."
+
+Rscript plot_heatmaps.R
+
+echo
+echo "Pipeline finished successfully!"

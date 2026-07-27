@@ -23,7 +23,6 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 - [arrayScope.sh](#arrayscopesh--genome-repeat-analysis-pipeline)
 - [satDNA_density.sh](#satdna_densitysh--circos-like-satellitome-density-plot)
 - [satDNA_similarity.py](#satdna_similaritypy--automated-alignment-of-satellite-dna-monomers-for-variant-and-superfamily-analysis)
-- [satFlank.sh](#satflanksh--satellitedna-flank-extraction-and-gene-overlap-analysis-pipeline)
 - [gene_extractor.sh](#gene_extractorsh--extract-gene-sequences-from-ncbi-by-species)
 - [monoMiner.py](#monominerpy--reference-guided-motif-mining-from-short-reads)
     
@@ -289,50 +288,6 @@ bash gene_extractor.sh BRCA1 species.txt
 
 ---
 
-## satFlank.sh – SatelliteDNA Flank Extraction and Gene Overlap Analysis Pipeline
-
-### Description
-**satFlank.sh** identifies satellite DNA flanking regions using **BLAST**, extracts sequences, and compares with GFF annotations to find overlapping genes.
-
-###  Features
-- Multiplies reference sequence for improved BLAST sensitivity
-- Filters `.bed` to keep largest non-overlapping regions
-- Sequence extraction with **seqtk**
-- Gene overlap analysis from GFF
-- Parallel processing
-
-###  Dependencies
-```bash
-sudo apt-get install blast2 seqtk parallel
-```
-
-### Input Files
-1. Library file (FASTA)
-2. Reference sequence (FASTA)
-3. GFF annotation file
-
-### Output Files
-- `monomeros_validos.filtrado.bed`
-- Extracted sequences (FASTA)
-- Gene overlap table (TSV)
-
-###  Usage
-```bash
-bash satFlank.sh
-```
-You will be prompted to enter:
-1. Library file name (FASTA)
-2. Reference file name (FASTA)
-3. Number of times to multiply the reference sequence
-4. BLAST output file name
-5. Output file name for extracted sequences
-6. Number of CPU cores for parallel processing
-7. GFF file name
-8. Final output file name for GFF analysis
-
-
-
----
 
 ## monoMiner.py – Reference-guided Motif Mining from Short Reads
 

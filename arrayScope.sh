@@ -268,6 +268,11 @@ def infer_pretty_name_from_header(header, fallback_index):
                 return f"scaffold{label}"
             return f"Chromosome{label}"
 
+    # Preserve simple sequence names already present in the FASTA header,
+    # such as B1, B2 or microB.
+    if re.fullmatch(r'[A-Za-z0-9_.-]+', h):
+        return h
+
     return f"Chromosome{fallback_index}"
 
 def build_header_mapping(fasta_path):
@@ -998,4 +1003,3 @@ print("Saved table:", os.path.join(genome_name, "sequence_name_mapping.tsv"))
 EOF
 
 done
-

@@ -171,6 +171,7 @@ echo "Final references (no extension): ${expanded_refs_no_ext[@]}"
 
 for input_biblio in $input_biblios; do
     genome_name=$(remove_extensions "$input_biblio")
+    output_prefix="${genome_name}_${multiplier}x"
     mkdir -p "$genome_name"
 
     temp_genome="$genome_name/temp_genome.fasta"
@@ -205,12 +206,12 @@ for input_biblio in $input_biblios; do
                 tail -n +2 "$f"
             fi
         done
-    } > "$genome_name/raw_blast_hits.tsv"
+    } > "$genome_name/${output_prefix}_raw_blast_hits.tsv"
 
-    if [ ! -s "$genome_name/raw_blast_hits.tsv" ]; then
-        echo "The file raw_blast_hits.tsv is empty for $genome_name."
+    if [ ! -s "$genome_name/${output_prefix}_raw_blast_hits.tsv" ]; then
+        echo "The file ${output_prefix}_raw_blast_hits.tsv is empty for $genome_name."
     else
-        echo "The file raw_blast_hits.tsv was created for $genome_name."
+        echo "The file ${output_prefix}_raw_blast_hits.tsv was created for $genome_name."
     fi
 
 python3 - <<EOF
@@ -229,8 +230,9 @@ from matplotlib.ticker import MultipleLocator
 from matplotlib.colors import LinearSegmentedColormap
 
 fasta_file = "$temp_genome"
-raw_hits_file = "$genome_name/raw_blast_hits.tsv"
 genome_name = "$genome_name"
+output_prefix = "$output_prefix"
+raw_hits_file = os.path.join(genome_name, f"{output_prefix}_raw_blast_hits.tsv")
 
 MIN_MONOMERS_PER_ARRAY = int("$multiplier")
 ADAPTIVE_GAP_CAP = int("$adaptive_gap_cap")
@@ -240,6 +242,9 @@ TOP_N_ARRAYS = int("$top_n_arrays")
 HIGHLIGHT_CHROMOSOMES_RAW = "$highlight_chromosomes"
 
 os.makedirs(genome_name, exist_ok=True)
+
+def output_path(filename):
+    return os.path.join(genome_name, f"{output_prefix}_{filename}")
 
 def natural_sort_key(text):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'([0-9]+)', str(text))]
@@ -750,8 +755,8 @@ def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes
     )
 
     fig.tight_layout()
-    fig.savefig(os.path.join(genome_name, f"{out_prefix}.png"), dpi=600, bbox_inches="tight")
-    fig.savefig(os.path.join(genome_name, f"{out_prefix}.pdf"), bbox_inches="tight")
+    fig.savefig(output_path(f"{out_prefix}.png"), dpi=600, bbox_inches="tight")
+    fig.savefig(output_path(f"{out_prefix}.pdf"), bbox_inches="tight")
     plt.close(fig)
 
 def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
@@ -802,8 +807,8 @@ def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
 
     ax.legend(title="References", bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=9, title_fontsize=10)
     fig.tight_layout()
-    fig.savefig(os.path.join(genome_name, "array_chromosome_vs_size_scatter.png"), dpi=300, bbox_inches="tight")
-    fig.savefig(os.path.join(genome_name, "array_chromosome_vs_size_scatter.pdf"), bbox_inches="tight")
+    fig.savefig(output_path("array_chromosome_vs_size_scatter.png"), dpi=300, bbox_inches="tight")
+    fig.savefig(output_path("array_chromosome_vs_size_scatter.pdf"), bbox_inches="tight")
     plt.close(fig)
 
 def draw_heatmap(arrays_by_reference, sorted_chromosomes, all_refs):
@@ -830,8 +835,8 @@ def draw_heatmap(arrays_by_reference, sorted_chromosomes, all_refs):
     summary_bp = summary_bp.reindex(index=sorted_chromosomes, columns=all_refs, fill_value=0)
     summary_count = summary_count.reindex(index=sorted_chromosomes, columns=all_refs, fill_value=0)
 
-    summary_bp.to_csv(os.path.join(genome_name, "heatmap_total_array_bp_by_chromosome_reference.tsv"), sep="\t")
-    summary_count.to_csv(os.path.join(genome_name, "heatmap_array_count_by_chromosome_reference.tsv"), sep="\t")
+    summary_bp.to_csv(output_path("heatmap_total_array_bp_by_chromosome_reference.tsv"), sep="\t")
+    summary_count.to_csv(output_path("heatmap_array_count_by_chromosome_reference.tsv"), sep="\t")
 
     values = np.log10(summary_bp.values.astype(float) + 1)
 
@@ -854,8 +859,8 @@ def draw_heatmap(arrays_by_reference, sorted_chromosomes, all_refs):
     cbar.set_label("log10(total array bp + 1)")
 
     fig.tight_layout()
-    fig.savefig(os.path.join(genome_name, "heatmap_chromosome_vs_satdna_total_bp.png"), dpi=300, bbox_inches="tight")
-    fig.savefig(os.path.join(genome_name, "heatmap_chromosome_vs_satdna_total_bp.pdf"), bbox_inches="tight")
+    fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.png"), dpi=300, bbox_inches="tight")
+    fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.pdf"), bbox_inches="tight")
     plt.close(fig)
 
 def make_top_arrays(arrays_by_reference, top_n):
@@ -871,7 +876,7 @@ def make_top_arrays(arrays_by_reference, top_n):
     )
 
 accession_to_pretty, pretty_to_length, accession_to_length, records_info = build_header_mapping(fasta_file)
-save_header_mapping(records_info, os.path.join(genome_name, "sequence_name_mapping.tsv"))
+save_header_mapping(records_info, output_path("sequence_name_mapping.tsv"))
 
 raw_hits = read_raw_hits(raw_hits_file)
 
@@ -891,12 +896,12 @@ if raw_hits_mapped.empty or len(pretty_to_length) == 0:
 
 raw_hits_mapped = raw_hits_mapped.sort_values(["Chromosome","Reference","Start","End"]).reset_index(drop=True)
 
-raw_hits_mapped.to_csv(os.path.join(genome_name, "raw_blast_hits_mapped.tsv"), sep="\t", index=False)
-make_valid_monomers_bed(raw_hits_mapped, os.path.join(genome_name, "valid_monomers.bed"))
+raw_hits_mapped.to_csv(output_path("raw_blast_hits_mapped.tsv"), sep="\t", index=False)
+make_valid_monomers_bed(raw_hits_mapped, output_path("valid_monomers.bed"))
 
 arrays_by_reference, extension_factors = create_arrays_by_reference(raw_hits_mapped)
 
-extension_factors.to_csv(os.path.join(genome_name, "adaptive_merge_distance_by_reference.tsv"), sep="\t", index=False)
+extension_factors.to_csv(output_path("adaptive_merge_distance_by_reference.tsv"), sep="\t", index=False)
 
 if arrays_by_reference.empty:
     print("No arrays passed the minimum monomer filter. Skipping plots.")
@@ -904,12 +909,12 @@ if arrays_by_reference.empty:
 
 merged_regions = create_merged_regions_multi_satdna(arrays_by_reference, overlap_dist=0)
 
-arrays_by_reference.to_csv(os.path.join(genome_name, "arrays_by_reference.tsv"), sep="\t", index=False)
-arrays_by_reference.to_csv(os.path.join(genome_name, "arrays_by_reference_for_plot.tsv"), sep="\t", index=False)
-merged_regions.to_csv(os.path.join(genome_name, "merged_regions_multi_satdna.tsv"), sep="\t", index=False)
+arrays_by_reference.to_csv(output_path("arrays_by_reference.tsv"), sep="\t", index=False)
+arrays_by_reference.to_csv(output_path("arrays_by_reference_for_plot.tsv"), sep="\t", index=False)
+merged_regions.to_csv(output_path("merged_regions_multi_satdna.tsv"), sep="\t", index=False)
 
 # Backward-compatible output name from the older script.
-merged_regions.to_csv(os.path.join(genome_name, "merged_arrays.tsv"), sep="\t", index=False)
+merged_regions.to_csv(output_path("merged_arrays.tsv"), sep="\t", index=False)
 
 all_refs = sorted(arrays_by_reference["Reference"].dropna().unique(), key=natural_sort_key)
 sorted_chromosomes = sorted(pretty_to_length.keys(), key=natural_sort_key)
@@ -920,7 +925,7 @@ with open(os.path.join(genome_name, "reference_colors.json"), "w") as f:
     json.dump({k: list(v) for k, v in color_map.items()}, f, indent=2)
 
 top_arrays = make_top_arrays(arrays_by_reference, TOP_N_ARRAYS)
-top_arrays.to_csv(os.path.join(genome_name, f"top_{TOP_N_ARRAYS}_arrays_by_reference.tsv"), sep="\t", index=False)
+top_arrays.to_csv(output_path(f"top_{TOP_N_ARRAYS}_arrays_by_reference.tsv"), sep="\t", index=False)
 
 draw_chromosome_array_plot(
     plot_arrays=arrays_by_reference,
@@ -985,21 +990,22 @@ summary = (
     )
     .reset_index()
 )
-summary.to_csv(os.path.join(genome_name, "summary_by_reference.tsv"), sep="\t", index=False)
+summary.to_csv(output_path("summary_by_reference.tsv"), sep="\t", index=False)
 
 print("Plots and tables successfully generated in:", genome_name)
-print("Saved image:", os.path.join(genome_name, "chromosomes_with_annotations.png"))
-print("Saved image:", os.path.join(genome_name, f"chromosomes_with_annotations_plus_top_{TOP_N_ARRAYS}.png"))
-print("Saved image:", os.path.join(genome_name, "array_chromosome_vs_size_scatter.png"))
-print("Saved image:", os.path.join(genome_name, "heatmap_chromosome_vs_satdna_total_bp.png"))
-print("Saved table:", os.path.join(genome_name, "raw_blast_hits.tsv"))
-print("Saved table:", os.path.join(genome_name, "raw_blast_hits_mapped.tsv"))
-print("Saved table:", os.path.join(genome_name, "valid_monomers.bed"))
-print("Saved table:", os.path.join(genome_name, "arrays_by_reference.tsv"))
-print("Saved table:", os.path.join(genome_name, "merged_regions_multi_satdna.tsv"))
-print("Saved table:", os.path.join(genome_name, "adaptive_merge_distance_by_reference.tsv"))
-print("Saved table:", os.path.join(genome_name, "summary_by_reference.tsv"))
-print("Saved table:", os.path.join(genome_name, "sequence_name_mapping.tsv"))
+print("Output prefix:", output_prefix)
+print("Saved image:", output_path("chromosomes_with_annotations.png"))
+print("Saved image:", output_path(f"chromosomes_with_annotations_plus_top_{TOP_N_ARRAYS}.png"))
+print("Saved image:", output_path("array_chromosome_vs_size_scatter.png"))
+print("Saved image:", output_path("heatmap_chromosome_vs_satdna_total_bp.png"))
+print("Saved table:", raw_hits_file)
+print("Saved table:", output_path("raw_blast_hits_mapped.tsv"))
+print("Saved table:", output_path("valid_monomers.bed"))
+print("Saved table:", output_path("arrays_by_reference.tsv"))
+print("Saved table:", output_path("merged_regions_multi_satdna.tsv"))
+print("Saved table:", output_path("adaptive_merge_distance_by_reference.tsv"))
+print("Saved table:", output_path("summary_by_reference.tsv"))
+print("Saved table:", output_path("sequence_name_mapping.tsv"))
 EOF
 
 done

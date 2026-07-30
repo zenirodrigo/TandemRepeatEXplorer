@@ -31,7 +31,7 @@ Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit for the identifi
 ## Quick Start
 ```bash
 git clone https://github.com/zenirodrigo/TandemRepeatEXplorer.git
-cd T-REx
+cd TandemRepeatEXplorer
 # T-REx provides a complete Conda environment containing all required dependencies for every module in the toolkit.
 
 conda env create -f environment.yml

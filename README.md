@@ -111,8 +111,6 @@ pip install biopython numpy pandas matplotlib openpyxl
 OBS: If you have a fasta with multi satDNAs, you can run the separe_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta.
 ### Output Files
 
-### Output Files
-
 Main outputs include:
 
 #### BLAST and array tables

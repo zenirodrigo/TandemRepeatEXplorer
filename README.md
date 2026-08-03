@@ -75,11 +75,33 @@ ArrayScope was designed to work with both individual satDNA monomers and complet
 - **awk**
 
 **Quick install example:**
+### Dependencies
+
+ArrayScope requires the following software.
+
+#### Bioinformatics software
+
 ```bash
-conda install bedtools
-conda install -c bioconda blast
+conda install -c bioconda blast bedtools
 conda install -c conda-forge parallel
-pip install biopython pandas matplotlib seaborn
+```
+
+#### Python packages
+
+```bash
+conda install -c conda-forge \
+    python=3.11 \
+    biopython \
+    numpy \
+    pandas \
+    matplotlib \
+    openpyxl
+```
+
+or, alternatively,
+
+```bash
+pip install biopython numpy pandas matplotlib openpyxl
 ```
 
 ### Input Files

@@ -135,9 +135,12 @@ bash arrayScope.sh
 
 ```
 ### Exemple of results
-<img width="5374" height="2365" alt="array_chromosome_vs_size_scatter" src="https://github.com/user-attachments/assets/433a9f0c-960d-472d-a51a-40f46c6a1d72" />
-<img width="22759" height="8326" alt="chromosomes_with_annotations" src="https://github.com/user-attachments/assets/c80bd40e-4507-44ce-9fb2-6114c18b5071" />
-<img width="2810" height="2516" alt="heatmap_chromosome_vs_satdna_total_bp" src="https://github.com/user-attachments/assets/b99f295a-ba28-4c71-9408-c3ade07db095" />
+<img width="22759" height="8626" alt="prochilodus_lineatus_assembly_final_10x_chromosomes_with_annotations" src="https://github.com/user-attachments/assets/cd5d8cda-8aa7-4a8c-bff7-fc87b635e31b" />
+<img width="5375" height="2365" alt="prochilodus_lineatus_assembly_final_10x_array_chromosome_vs_size_scatter" src="https://github.com/user-attachments/assets/2130f82c-834b-421c-b52a-888bb5556a2e" />
+![Uploading prochilodus_lineatus_assembly_final_10x_chromosomes_with_annotations.png…]()
+<img width="17394" height="7239" alt="prochilodus_lineatus_assembly_final_10x_satdna_percentage_composition_by_chromosome" src="https://github.com/user-attachments/assets/8d6be067-a8af-4a52-b2e5-ecb43bd39cb7" />
+<img width="2831" height="2924" alt="prochilodus_lineatus_assembly_final_10x_heatmap_chromosome_vs_satdna_total_bp" src="https://github.com/user-attachments/assets/1c243184-2d61-4d23-9527-e5e46344b10e" />
+
 
 
 ---

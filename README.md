@@ -75,8 +75,6 @@ ArrayScope was designed to work with both individual satDNA monomers and complet
 - **awk**
 
 **Quick install example:**
-### Dependencies
-
 ArrayScope requires the following software.
 
 #### Bioinformatics software

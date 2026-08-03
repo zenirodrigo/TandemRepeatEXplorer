@@ -863,6 +863,552 @@ def draw_heatmap(arrays_by_reference, sorted_chromosomes, all_refs):
     fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.pdf"), bbox_inches="tight")
     plt.close(fig)
 
+
+
+def array_n50_l50(lengths):
+    """Return N50 and L50 for a collection of array lengths."""
+    vals = sorted((int(x) for x in lengths if pd.notna(x) and int(x) > 0), reverse=True)
+    if not vals:
+        return 0, 0
+    half = sum(vals) / 2.0
+    cumulative = 0
+    for i, value in enumerate(vals, start=1):
+        cumulative += value
+        if cumulative >= half:
+            return int(value), int(i)
+    return int(vals[-1]), int(len(vals))
+
+
+def build_nonoverlapping_satdna_composition(arrays_by_reference, pretty_to_length, sorted_chromosomes):
+    """
+    Convert possibly overlapping satDNA arrays into disjoint chromosome segments.
+
+    Bases covered by exactly one reference are assigned to that satDNA. Bases
+    simultaneously covered by two or more references are assigned to the
+    explicit category 'Multi_satDNA_overlap', preventing double counting.
+    """
+    category_rows = []
+    segment_rows = []
+
+    for chrom in sorted_chromosomes:
+        chrom_len = int(pretty_to_length[chrom])
+        sub = arrays_by_reference[arrays_by_reference["Chromosome"] == chrom].copy()
+
+        events = {}
+        for _, row in sub.iterrows():
+            start = max(1, int(row["Start"]))
+            end = min(chrom_len, int(row["End"]))
+            if end < start:
+                continue
+            ref = str(row["Reference"])
+            events.setdefault(start, []).append((ref, 1))
+            events.setdefault(end + 1, []).append((ref, -1))
+
+        active_counts = {}
+        category_bp = {}
+        previous_pos = 1
+
+        for pos in sorted(events):
+            pos = min(max(1, int(pos)), chrom_len + 1)
+            if pos > previous_pos:
+                active_refs = sorted(
+                    [ref for ref, count in active_counts.items() if count > 0],
+                    key=natural_sort_key,
+                )
+                segment_len = pos - previous_pos
+                if len(active_refs) == 1:
+                    category = active_refs[0]
+                elif len(active_refs) > 1:
+                    category = "Multi_satDNA_overlap"
+                else:
+                    category = "Non_satDNA"
+
+                category_bp[category] = category_bp.get(category, 0) + segment_len
+                if category != "Non_satDNA":
+                    segment_rows.append({
+                        "Chromosome": chrom,
+                        "Start": previous_pos,
+                        "End": pos - 1,
+                        "LengthBp": segment_len,
+                        "Category": category,
+                        "ActiveReferences": ",".join(active_refs),
+                        "NumActiveReferences": len(active_refs),
+                    })
+
+            for ref, delta in events[pos]:
+                active_counts[ref] = active_counts.get(ref, 0) + delta
+                if active_counts[ref] <= 0:
+                    active_counts.pop(ref, None)
+            previous_pos = pos
+
+        if previous_pos <= chrom_len:
+            category_bp["Non_satDNA"] = category_bp.get("Non_satDNA", 0) + (chrom_len - previous_pos + 1)
+
+        assigned = sum(category_bp.values())
+        if assigned < chrom_len:
+            category_bp["Non_satDNA"] = category_bp.get("Non_satDNA", 0) + (chrom_len - assigned)
+        elif assigned > chrom_len:
+            raise ValueError(f"Composition exceeds chromosome length for {chrom}: {assigned} > {chrom_len}")
+
+        for category, bp in category_bp.items():
+            category_rows.append({
+                "Chromosome": chrom,
+                "ChromosomeLengthBp": chrom_len,
+                "Category": category,
+                "CoveredBp": int(bp),
+                "PercentChromosome": 100.0 * float(bp) / chrom_len if chrom_len else 0.0,
+            })
+
+    return pd.DataFrame(category_rows), pd.DataFrame(segment_rows)
+
+
+def summarize_satdna_by_chromosome(arrays_by_reference, composition_long, pretty_to_length, sorted_chromosomes):
+    rows = []
+
+    for chrom in sorted_chromosomes:
+        chrom_len = int(pretty_to_length[chrom])
+        sub = arrays_by_reference[arrays_by_reference["Chromosome"] == chrom].copy()
+        comp = composition_long[composition_long["Chromosome"] == chrom].copy()
+
+        sat_comp = comp[comp["Category"] != "Non_satDNA"]
+        union_bp = int(sat_comp["CoveredBp"].sum()) if not sat_comp.empty else 0
+        overlap_bp = int(sat_comp.loc[sat_comp["Category"] == "Multi_satDNA_overlap", "CoveredBp"].sum()) if not sat_comp.empty else 0
+
+        if sub.empty:
+            rows.append({
+                "Chromosome": chrom,
+                "ChromosomeLengthBp": chrom_len,
+                "NumSatDNAFamilies": 0,
+                "NumArrays": 0,
+                "RawSummedArrayBp": 0,
+                "UnionSatDNABp": union_bp,
+                "SatDNAPercentChromosome": 100.0 * union_bp / chrom_len if chrom_len else 0.0,
+                "MultiSatDNAOverlapBp": overlap_bp,
+                "MultiSatDNAOverlapPercent": 100.0 * overlap_bp / chrom_len if chrom_len else 0.0,
+                "LargestArrayBp": 0,
+                "LargestArraySatDNA": "NA",
+                "LargestArrayStart": np.nan,
+                "LargestArrayEnd": np.nan,
+                "ArrayN50Bp": 0,
+                "ArrayL50": 0,
+                "MedianArrayBp": 0,
+                "MeanArrayBp": 0,
+                "ArrayP90Bp": 0,
+                "ArraysPerMb": 0,
+                "SatDNAFamiliesPerMb": 0,
+                "TotalMonomerHits": 0,
+                "WeightedMeanPident": np.nan,
+                "DominantSatDNA": "NA",
+                "DominantSatDNAExclusiveBp": 0,
+                "DominantSatDNAPercentChromosome": 0.0,
+            })
+            continue
+
+        n50, l50 = array_n50_l50(sub["ArraySize"].tolist())
+        largest = sub.sort_values(["ArraySize", "Reference"], ascending=[False, True]).iloc[0]
+
+        exclusive = comp[~comp["Category"].isin(["Non_satDNA", "Multi_satDNA_overlap"])].copy()
+        if exclusive.empty:
+            dominant_name = "NA"
+            dominant_bp = 0
+            dominant_pct = 0.0
+        else:
+            dominant = exclusive.sort_values(["CoveredBp", "Category"], ascending=[False, True]).iloc[0]
+            dominant_name = str(dominant["Category"])
+            dominant_bp = int(dominant["CoveredBp"])
+            dominant_pct = float(dominant["PercentChromosome"])
+
+        weights = sub["ArraySize"].astype(float)
+        weighted_pident = float(np.average(sub["MeanPident"], weights=weights)) if weights.sum() > 0 else np.nan
+
+        rows.append({
+            "Chromosome": chrom,
+            "ChromosomeLengthBp": chrom_len,
+            "NumSatDNAFamilies": int(sub["Reference"].nunique()),
+            "NumArrays": int(len(sub)),
+            "RawSummedArrayBp": int(sub["ArraySize"].sum()),
+            "UnionSatDNABp": union_bp,
+            "SatDNAPercentChromosome": 100.0 * union_bp / chrom_len if chrom_len else 0.0,
+            "MultiSatDNAOverlapBp": overlap_bp,
+            "MultiSatDNAOverlapPercent": 100.0 * overlap_bp / chrom_len if chrom_len else 0.0,
+            "LargestArrayBp": int(largest["ArraySize"]),
+            "LargestArraySatDNA": str(largest["Reference"]),
+            "LargestArrayStart": int(largest["Start"]),
+            "LargestArrayEnd": int(largest["End"]),
+            "ArrayN50Bp": n50,
+            "ArrayL50": l50,
+            "MedianArrayBp": float(sub["ArraySize"].median()),
+            "MeanArrayBp": float(sub["ArraySize"].mean()),
+            "ArrayP90Bp": float(sub["ArraySize"].quantile(0.90)),
+            "ArraysPerMb": float(len(sub) / (chrom_len / 1e6)) if chrom_len else 0.0,
+            "SatDNAFamiliesPerMb": float(sub["Reference"].nunique() / (chrom_len / 1e6)) if chrom_len else 0.0,
+            "TotalMonomerHits": int(sub["NumMonomers"].sum()),
+            "WeightedMeanPident": weighted_pident,
+            "DominantSatDNA": dominant_name,
+            "DominantSatDNAExclusiveBp": dominant_bp,
+            "DominantSatDNAPercentChromosome": dominant_pct,
+        })
+
+    return pd.DataFrame(rows)
+
+
+def summarize_satdna_by_chromosome_reference(arrays_by_reference, pretty_to_length, sorted_chromosomes, all_refs):
+    rows = []
+    for chrom in sorted_chromosomes:
+        chrom_len = int(pretty_to_length[chrom])
+        for ref in all_refs:
+            sub = arrays_by_reference[
+                (arrays_by_reference["Chromosome"] == chrom) &
+                (arrays_by_reference["Reference"] == ref)
+            ].copy()
+            if sub.empty:
+                continue
+            n50, l50 = array_n50_l50(sub["ArraySize"].tolist())
+            largest = sub.sort_values("ArraySize", ascending=False).iloc[0]
+            rows.append({
+                "Chromosome": chrom,
+                "ChromosomeLengthBp": chrom_len,
+                "Reference": ref,
+                "NumArrays": int(len(sub)),
+                "TotalArrayBpRaw": int(sub["ArraySize"].sum()),
+                "RawPercentChromosome": 100.0 * float(sub["ArraySize"].sum()) / chrom_len if chrom_len else 0.0,
+                "LargestArrayBp": int(largest["ArraySize"]),
+                "LargestArrayStart": int(largest["Start"]),
+                "LargestArrayEnd": int(largest["End"]),
+                "ArrayN50Bp": n50,
+                "ArrayL50": l50,
+                "MedianArrayBp": float(sub["ArraySize"].median()),
+                "MeanArrayBp": float(sub["ArraySize"].mean()),
+                "ArrayP90Bp": float(sub["ArraySize"].quantile(0.90)),
+                "TotalMonomerHits": int(sub["NumMonomers"].sum()),
+                "MeanPidentWeightedByArrayBp": float(np.average(sub["MeanPident"], weights=sub["ArraySize"])) if sub["ArraySize"].sum() > 0 else np.nan,
+            })
+    return pd.DataFrame(rows)
+
+
+def format_bp(value):
+    """Format a base-pair value for compact plot labels."""
+    value = float(value)
+    if value >= 1e9:
+        return f"{value / 1e9:.2f} Gb"
+    if value >= 1e6:
+        return f"{value / 1e6:.2f} Mb"
+    if value >= 1e3:
+        return f"{value / 1e3:.1f} kb"
+    return f"{int(round(value))} bp"
+
+
+def add_complete_genome_to_composition(composition_long, pretty_to_length, sorted_chromosomes):
+    """
+    Append a final whole-genome row to the non-overlapping composition table.
+
+    The whole-genome percentages use the summed length of every sequence selected
+    by num_sequences as the denominator. Thus, when 30 sequences are selected,
+    the plot contains those 30 rows plus one final Complete_genome row.
+    """
+    total_genome_bp = int(sum(int(pretty_to_length[c]) for c in sorted_chromosomes))
+    genome_rows = (
+        composition_long
+        .groupby("Category", as_index=False)["CoveredBp"]
+        .sum()
+    )
+    genome_rows["Chromosome"] = "Complete_genome"
+    genome_rows["ChromosomeLengthBp"] = total_genome_bp
+    genome_rows["PercentChromosome"] = np.where(
+        total_genome_bp > 0,
+        100.0 * genome_rows["CoveredBp"].astype(float) / total_genome_bp,
+        0.0,
+    )
+    genome_rows = genome_rows[
+        ["Chromosome", "ChromosomeLengthBp", "Category", "CoveredBp", "PercentChromosome"]
+    ]
+    return pd.concat([composition_long, genome_rows], ignore_index=True)
+
+
+def build_satellitome_composition(arrays_by_reference, sorted_chromosomes, all_refs):
+    """
+    Summarize the raw summed array size of every satDNA family.
+
+    For each chromosome, the sum of all ArraySize values is defined as 100% of
+    that chromosome's satellitome. A final Complete_genome row is calculated
+    from all selected chromosomes/scaffolds together.
+
+    This is intentionally based on the raw sum of arrays by reference, as
+    requested. Therefore, bases shared by arrays from different references can
+    contribute to more than one reference in this satellitome-composition panel.
+    The chromosome-length panel remains non-overlapping and does not double count.
+    """
+    raw = (
+        arrays_by_reference
+        .groupby(["Chromosome", "Reference"], as_index=False)["ArraySize"]
+        .sum()
+        .rename(columns={"ArraySize": "TotalArrayBp"})
+    )
+
+    complete = (
+        arrays_by_reference
+        .groupby("Reference", as_index=False)["ArraySize"]
+        .sum()
+        .rename(columns={"ArraySize": "TotalArrayBp"})
+    )
+    complete["Chromosome"] = "Complete_genome"
+    raw = pd.concat(
+        [raw, complete[["Chromosome", "Reference", "TotalArrayBp"]]],
+        ignore_index=True,
+    )
+
+    expected_rows = []
+    for chrom in list(sorted_chromosomes) + ["Complete_genome"]:
+        for ref in all_refs:
+            expected_rows.append((chrom, ref))
+    full = pd.DataFrame(expected_rows, columns=["Chromosome", "Reference"])
+    raw = full.merge(raw, on=["Chromosome", "Reference"], how="left")
+    raw["TotalArrayBp"] = raw["TotalArrayBp"].fillna(0).astype(int)
+
+    totals = (
+        raw.groupby("Chromosome", as_index=False)["TotalArrayBp"]
+        .sum()
+        .rename(columns={"TotalArrayBp": "TotalSatellitomeBpRaw"})
+    )
+    raw = raw.merge(totals, on="Chromosome", how="left")
+    raw["PercentSatellitome"] = np.where(
+        raw["TotalSatellitomeBpRaw"] > 0,
+        100.0 * raw["TotalArrayBp"] / raw["TotalSatellitomeBpRaw"],
+        0.0,
+    )
+    raw["RankWithinChromosome"] = (
+        raw.groupby("Chromosome")["TotalArrayBp"]
+        .rank(method="first", ascending=False)
+        .astype(int)
+    )
+    return raw
+
+
+def draw_satdna_percentage_composition(
+    composition_long,
+    satellitome_long,
+    sorted_chromosomes,
+    all_refs,
+    color_map,
+):
+    """
+    Draw a two-panel figure.
+
+    Left: percentage of complete chromosome length occupied by each satDNA,
+    using non-overlapping genomic segments.
+
+    Right: relative composition of the satellitome only. For every row, the raw
+    sum of all arrays is 100%, and satDNA families are stacked in decreasing
+    total-array-size order within that chromosome.
+    """
+    if composition_long.empty:
+        print("No data available for satDNA percentage composition plot. Skipping.")
+        return
+
+    composition_with_genome = add_complete_genome_to_composition(
+        composition_long, pretty_to_length, sorted_chromosomes
+    )
+
+    categories = list(all_refs)
+    if (composition_with_genome["Category"] == "Multi_satDNA_overlap").any():
+        categories.append("Multi_satDNA_overlap")
+    categories.append("Non_satDNA")
+
+    chromosome_order = list(sorted_chromosomes) + ["Complete_genome"]
+
+    pivot = composition_with_genome.pivot_table(
+        index="Chromosome",
+        columns="Category",
+        values="PercentChromosome",
+        aggfunc="sum",
+        fill_value=0,
+    ).reindex(index=chromosome_order, columns=categories, fill_value=0)
+
+    pivot.to_csv(output_path("satdna_percentage_composition_wide.tsv"), sep="\t")
+    composition_with_genome.to_csv(
+        output_path("satdna_percentage_composition_long_with_complete_genome.tsv"),
+        sep="\t",
+        index=False,
+    )
+
+    sat_wide_bp = satellitome_long.pivot_table(
+        index="Chromosome",
+        columns="Reference",
+        values="TotalArrayBp",
+        aggfunc="sum",
+        fill_value=0,
+    ).reindex(index=chromosome_order, columns=all_refs, fill_value=0)
+    sat_wide_pct = satellitome_long.pivot_table(
+        index="Chromosome",
+        columns="Reference",
+        values="PercentSatellitome",
+        aggfunc="sum",
+        fill_value=0,
+    ).reindex(index=chromosome_order, columns=all_refs, fill_value=0)
+    sat_wide_bp.to_csv(output_path("satellitome_total_array_bp_wide.tsv"), sep="\t")
+    sat_wide_pct.to_csv(output_path("satellitome_percentage_composition_wide.tsv"), sep="\t")
+    satellitome_long.to_csv(
+        output_path("satellitome_composition_long.tsv"), sep="\t", index=False
+    )
+
+    # barh draws the first entry at the bottom. Prepending Complete_genome makes
+    # it the final/bottom row while preserving B1, B2, chromosomes and unplaced
+    # in the same visible order as the original figure.
+    plot_chromosomes = ["Complete_genome"] + list(sorted_chromosomes)[::-1]
+    fig_height = max(9, len(plot_chromosomes) * 0.43)
+    fig, (ax_left, ax_right) = plt.subplots(
+        nrows=1,
+        ncols=2,
+        figsize=(31, fig_height),
+        sharey=True,
+        gridspec_kw={"width_ratios": [1.0, 1.0], "wspace": 0.08},
+    )
+    y = np.arange(len(plot_chromosomes))
+
+    category_colors = dict(color_map)
+    category_colors["Multi_satDNA_overlap"] = (0.15, 0.15, 0.15)
+    category_colors["Non_satDNA"] = (0.91, 0.91, 0.91)
+
+    # LEFT PANEL: complete chromosome length = 100%.
+    left_values = np.zeros(len(plot_chromosomes), dtype=float)
+    for category in categories:
+        values = pivot.loc[plot_chromosomes, category].to_numpy(dtype=float)
+        ax_left.barh(
+            y,
+            values,
+            left=left_values,
+            height=0.72,
+            label=category,
+            color=category_colors.get(category, (0.5, 0.5, 0.5)),
+            edgecolor="white",
+            linewidth=0.15,
+        )
+        left_values += values
+
+    total_sat_chrom_pct = (
+        100.0 - pivot.loc[plot_chromosomes, "Non_satDNA"].to_numpy(dtype=float)
+    )
+    for yi, pct in zip(y, total_sat_chrom_pct):
+        if pct >= 0.05:
+            ax_left.text(
+                min(pct + 0.18, 99.2), yi, f"{pct:.2f}%",
+                va="center", ha="left", fontsize=8
+            )
+
+    ax_left.set_xlim(0, 100)
+    ax_left.set_xlabel("Percentage of chromosome length")
+    ax_left.set_ylabel("Chromosome/scaffold")
+    ax_left.set_title("satDNA as a percentage of chromosome length")
+    ax_left.set_yticks(y)
+    ax_left.set_yticklabels(plot_chromosomes)
+    ax_left.grid(axis="x", linewidth=0.35, alpha=0.35)
+
+    # RIGHT PANEL: summed arrays in each chromosome = 100% of its satellitome.
+    total_sat_bp_lookup = (
+        satellitome_long[["Chromosome", "TotalSatellitomeBpRaw"]]
+        .drop_duplicates("Chromosome")
+        .set_index("Chromosome")["TotalSatellitomeBpRaw"]
+        .to_dict()
+    )
+
+    for yi, chrom in zip(y, plot_chromosomes):
+        row = satellitome_long[satellitome_long["Chromosome"] == chrom].copy()
+        row = row[row["TotalArrayBp"] > 0].sort_values(
+            ["TotalArrayBp", "Reference"], ascending=[False, True]
+        )
+        current_left = 0.0
+        for _, item in row.iterrows():
+            ref = str(item["Reference"])
+            pct = float(item["PercentSatellitome"])
+            ax_right.barh(
+                yi,
+                pct,
+                left=current_left,
+                height=0.72,
+                color=color_map.get(ref, (0.5, 0.5, 0.5)),
+                edgecolor="white",
+                linewidth=0.15,
+            )
+            current_left += pct
+
+        total_bp = int(total_sat_bp_lookup.get(chrom, 0))
+        ax_right.text(
+            100.35,
+            yi,
+            format_bp(total_bp),
+            va="center",
+            ha="left",
+            fontsize=8,
+            clip_on=False,
+        )
+
+    ax_right.set_xlim(0, 100)
+    ax_right.set_xlabel("Percentage of the satellitome (summed arrays = 100%)")
+    ax_right.set_title("Relative satDNA composition of each satellitome")
+    ax_right.grid(axis="x", linewidth=0.35, alpha=0.35)
+    ax_right.tick_params(axis="y", labelleft=False)
+
+    for ax in (ax_left, ax_right):
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+
+    legend_categories = list(all_refs)
+    if "Multi_satDNA_overlap" in categories:
+        legend_categories.append("Multi_satDNA_overlap")
+    legend_categories.append("Non_satDNA")
+    legend_handles = [
+        Rectangle(
+            (0, 0), 1, 1,
+            facecolor=category_colors.get(cat, (0.5, 0.5, 0.5)),
+            edgecolor="white",
+            linewidth=0.15,
+        )
+        for cat in legend_categories
+    ]
+    ax_right.legend(
+        legend_handles,
+        legend_categories,
+        title="satDNA / category",
+        bbox_to_anchor=(1.13, 1),
+        loc="upper left",
+        frameon=True,
+        fontsize=8,
+        title_fontsize=9,
+    )
+
+    fig.suptitle(
+        "Chromosomal satDNA abundance and satellitome composition",
+        fontsize=15,
+        y=0.997,
+    )
+    fig.tight_layout(rect=[0, 0, 0.91, 0.985])
+    fig.savefig(
+        output_path("satdna_percentage_composition_by_chromosome.png"),
+        dpi=600,
+        bbox_inches="tight",
+    )
+    fig.savefig(
+        output_path("satdna_percentage_composition_by_chromosome.pdf"),
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def save_metrics_workbook(chromosome_metrics, chromosome_reference_metrics, composition_long, composition_segments, satellitome_long):
+    out_xlsx = output_path("satdna_metrics_by_chromosome.xlsx")
+    try:
+        with pd.ExcelWriter(out_xlsx, engine="openpyxl") as writer:
+            chromosome_metrics.to_excel(writer, sheet_name="chromosome_metrics", index=False)
+            chromosome_reference_metrics.to_excel(writer, sheet_name="chromosome_x_satDNA", index=False)
+            composition_long.to_excel(writer, sheet_name="composition_long", index=False)
+            composition_segments.to_excel(writer, sheet_name="nonoverlap_segments", index=False)
+            satellitome_long.to_excel(writer, sheet_name="satellitome_composition", index=False)
+            arrays_by_reference.to_excel(writer, sheet_name="all_arrays", index=False)
+        print("Saved Excel workbook:", out_xlsx)
+    except ImportError:
+        print("openpyxl is not installed; TSV tables were saved, but the XLSX workbook was skipped.")
+
+
 def make_top_arrays(arrays_by_reference, top_n):
     if arrays_by_reference.empty:
         return arrays_by_reference.copy()
@@ -923,6 +1469,34 @@ highlight_chromosomes = parse_highlight_chromosomes(HIGHLIGHT_CHROMOSOMES_RAW, s
 color_map = get_color_map(all_refs)
 with open(os.path.join(genome_name, "reference_colors.json"), "w") as f:
     json.dump({k: list(v) for k, v in color_map.items()}, f, indent=2)
+
+# Chromosome-level metrics and non-overlapping percentage composition.
+composition_long, composition_segments = build_nonoverlapping_satdna_composition(
+    arrays_by_reference, pretty_to_length, sorted_chromosomes
+)
+chromosome_metrics = summarize_satdna_by_chromosome(
+    arrays_by_reference, composition_long, pretty_to_length, sorted_chromosomes
+)
+chromosome_reference_metrics = summarize_satdna_by_chromosome_reference(
+    arrays_by_reference, pretty_to_length, sorted_chromosomes, all_refs
+)
+
+composition_long.to_csv(output_path("satdna_percentage_composition_long.tsv"), sep="\t", index=False)
+composition_segments.to_csv(output_path("satdna_nonoverlapping_segments.tsv"), sep="\t", index=False)
+chromosome_metrics.to_csv(output_path("satdna_metrics_by_chromosome.tsv"), sep="\t", index=False)
+chromosome_reference_metrics.to_csv(output_path("satdna_metrics_by_chromosome_reference.tsv"), sep="\t", index=False)
+
+satellitome_long = build_satellitome_composition(
+    arrays_by_reference, sorted_chromosomes, all_refs
+)
+
+draw_satdna_percentage_composition(
+    composition_long, satellitome_long, sorted_chromosomes, all_refs, color_map
+)
+save_metrics_workbook(
+    chromosome_metrics, chromosome_reference_metrics, composition_long,
+    composition_segments, satellitome_long
+)
 
 top_arrays = make_top_arrays(arrays_by_reference, TOP_N_ARRAYS)
 top_arrays.to_csv(output_path(f"top_{TOP_N_ARRAYS}_arrays_by_reference.tsv"), sep="\t", index=False)
@@ -1006,6 +1580,15 @@ print("Saved table:", output_path("merged_regions_multi_satdna.tsv"))
 print("Saved table:", output_path("adaptive_merge_distance_by_reference.tsv"))
 print("Saved table:", output_path("summary_by_reference.tsv"))
 print("Saved table:", output_path("sequence_name_mapping.tsv"))
+print("Saved table:", output_path("satdna_metrics_by_chromosome.tsv"))
+print("Saved table:", output_path("satdna_metrics_by_chromosome_reference.tsv"))
+print("Saved table:", output_path("satdna_percentage_composition_long.tsv"))
+print("Saved table:", output_path("satdna_nonoverlapping_segments.tsv"))
+print("Saved table:", output_path("satdna_percentage_composition_long_with_complete_genome.tsv"))
+print("Saved table:", output_path("satellitome_composition_long.tsv"))
+print("Saved table:", output_path("satellitome_total_array_bp_wide.tsv"))
+print("Saved table:", output_path("satellitome_percentage_composition_wide.tsv"))
+print("Saved image:", output_path("satdna_percentage_composition_by_chromosome.png"))
 EOF
 
 done

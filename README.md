@@ -49,7 +49,6 @@ conda activate trex_env
 The pipeline processes multiple genome assemblies and reference monomers, performs **BLAST+** searches, automatically groups neighboring hits into arrays using an adaptive distance approach, and generates chromosome-scale visualizations and quantitative summaries.
 
 ArrayScope was designed to work with both individual satDNA monomers and complete satellitome datasets.
-> For variants in reference files — e.g., two slightly different monomers or the same repeat from different species, include an underscore `_` in the filename.
 
 ### Features
 
@@ -87,20 +86,48 @@ pip install biopython pandas matplotlib seaborn
 1. Genome assemblies (FASTA format)
 2. Reference monomers (FASTA format)
 
-OBS: If you have a fasta with multi satDNAs, you can run the separe_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta :)
+OBS: If you have a fasta with multi satDNAs, you can run the separe_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta.
+### Output Files
+
 ### Output Files
 
 Main outputs include:
 
-- `raw_blast_hits.tsv`
-- `array_summary.tsv`
-- `array_statistics.tsv`
-- `valid_monomers.bed`
-- `chromosomes_with_annotations.png`
-- `heatmap_chromosome_vs_satdna_total_bp.png`
-- `array_chromosome_vs_size_scatter.png`
+#### BLAST and array tables
 
-Additional auxiliary files may also be generated depending on the selected parameters.
+- raw_blast_hits.tsv
+- raw_blast_hits_mapped.tsv
+- valid_monomers.bed
+- arrays_by_reference.tsv
+- merged_regions_multi_satdna.tsv
+- adaptive_merge_distance_by_reference.tsv
+
+#### Quantitative summaries
+
+- summary_by_reference.tsv
+- heatmap_total_array_bp_by_chromosome_reference.tsv
+- heatmap_array_count_by_chromosome_reference.tsv
+- satdna_metrics_by_chromosome.tsv
+- satdna_metrics_by_chromosome_reference.tsv
+- satellitome_composition.tsv
+- Excel workbook containing all summary tables
+
+#### Figures
+
+- chromosomes_with_annotations_exact_scale.png
+- chromosomes_with_annotations.png
+- chromosomes_with_annotations_plus_top_N.png
+- array_chromosome_vs_size_scatter.png
+- heatmap_chromosome_vs_satdna_total_bp.png
+- satdna_percentage_composition_by_chromosome.png
+
+#### Auxiliary files
+
+- reference_colors.json
+- sequence_name_mapping.tsv
+
+PNG and PDF versions are generated for all figures.
+
 
 ###  Usage
 ```bash

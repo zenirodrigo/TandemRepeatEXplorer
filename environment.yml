@@ -39,3 +39,10 @@ dependencies:
   - sed
   - coreutils
   - findutils
+
+    # R packages used by the satDNA–synteny module
+  - r-base>=4.2
+  - r-ggplot2
+  - r-dplyr
+  - r-tidyr
+  - r-scales

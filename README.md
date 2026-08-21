@@ -106,7 +106,7 @@ pip install biopython numpy pandas matplotlib openpyxl
 1. Genome assemblies (FASTA format)
 2. Reference monomers (FASTA format)
 
-OBS: If you have a fasta with multi satDNAs, you can run the separe_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta.
+OBS: If you have a fasta with multi satDNAs, you can run the split_satdna.sh before running the arrayScope, to separate each sequence in a diferent fasta.
 ### Output Files
 
 Main outputs include:

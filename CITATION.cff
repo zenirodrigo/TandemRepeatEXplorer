@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+
+message: "If you use Tandem Repeat Explorer (T-REx) in your research, please cite this software."
+
+title: "Tandem Repeat Explorer (T-REx)"
+
+type: software
+
+authors:
+  - family-names: "Zeni"
+    given-names: "Rodrigo"
+
+abstract: >-
+  Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit
+  for the identification, characterization, and visualization of
+  tandem repeat arrays from genome assemblies and short-read
+  sequencing data.
+
+repository-code: "https://github.com/zenirodrigo/TandemRepeatEXplorer"
+
+url: "https://github.com/zenirodrigo/TandemRepeatEXplorer"
+
+license: MIT
+
+keywords:
+  - satellite DNA
+  - genomics

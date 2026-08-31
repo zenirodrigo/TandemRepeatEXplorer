@@ -7,8 +7,8 @@ title: "Tandem Repeat Explorer (T-REx)"
 type: software
 
 authors:
-  - family-names: "Zeni"
-    given-names: "Rodrigo"
+  - family-names: "dos Santos"
+    given-names: "Rodrigo Zeni"
 
 abstract: >-
   Tandem Repeat Explorer (T-REx) is a modular Bash/Python toolkit

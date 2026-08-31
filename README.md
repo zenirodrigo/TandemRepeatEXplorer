@@ -641,6 +641,7 @@ or
 
 
 ##  Citation
-If you use T-REx in your research, please cite the associated publication (in preparation).
+If you use T-REx in your research, please cite:
+dos Santos, R. Z. Tandem Repeat Explorer (T-REx) [Computer software]. https://github.com/zenirodrigo/TandemRepeatEXplorer
 
 

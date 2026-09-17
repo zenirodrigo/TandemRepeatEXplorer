@@ -828,7 +828,7 @@ def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes
     plt.close(fig)
 
 def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
-    """Improved scatter plot with better aesthetics."""
+    """Plot array sizes in bp on a linear axis from zero to the largest array."""
     df = arrays_by_reference.copy()
     if df.empty:
         print("No data available for the scatter plot. Skipping scatter.")
@@ -867,7 +867,8 @@ def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
             color=color_map.get(ref, "#777777"),
             label=ref,
             edgecolors='white',
-            linewidth=0.5
+            linewidth=0.5,
+            clip_on=False
         )
 
     ax.set_xticks(range(len(sorted_chromosomes)))
@@ -880,11 +881,9 @@ def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
     ax.grid(axis="y", which="major", color="#D0D0D0", linewidth=0.5, alpha=0.6)
     ax.grid(axis="y", which="minor", color="#EEEEEE", linewidth=0.2, alpha=0.4)
     
-    # Use log scale if data spans multiple orders of magnitude
-    sizes = df["ArraySize"].values
-    if len(sizes) > 0 and sizes.max() / max(sizes.min(), 1) > 100:
-        ax.set_yscale('log')
-        ax.set_ylabel("Array size (bp) - Log scale", fontsize=12, weight='bold')
+    # Keep the real array sizes on a linear axis. The top is the largest array.
+    max_array_size = float(df["ArraySize"].max())
+    ax.set_ylim(0, max_array_size if max_array_size > 0 else 1)
 
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)

@@ -51,6 +51,7 @@ run_blast_for_ref() {
     local multiplier="$3"
     local out_hits_tsv="$4"
     local blast_threads="$5"
+    local min_qcov="$6"
 
     local ref_fasta=""
     if [ -f "${ref_no_ext}.fasta" ]; then
@@ -76,7 +77,7 @@ run_blast_for_ref() {
         -query "$multiplied" \
         -out "$blast_output" \
         -evalue 1e-10 \
-        -qcov_hsp_perc 70 \
+        -qcov_hsp_perc "$min_qcov" \
         -max_target_seqs 10000 \
         -dust no \
         -soft_masking false \
@@ -121,20 +122,27 @@ run_blast_for_ref() {
 
 export -f run_blast_for_ref remove_extensions make_multiplied_fasta
 
+# Enhanced user interface with better descriptions
+echo "=== SatDNA Analysis Pipeline ==="
+echo "This pipeline detects and characterizes satellite DNA arrays in genome assemblies."
+echo ""
+
 read -e -p "Enter genome file names (space-separated): " input_biblios
 read -p "How many chromosome/scaffold sequences will be used? " num_sequences
-read -e -p "Enter reference (satDNA or another tandem repeat MONOMER) files (space-separated): " refs_in
-read -p "How many monomers will be used to create an array (minimum monomers in this study)? " multiplier
+read -e -p "Enter reference (satDNA or tandem repeat MONOMER) files (space-separated): " refs_in
+read -p "How many monomers will be used to create an array (minimum monomers)? " multiplier
 read -p "Maximum gap allowed for adaptive merging, in bp [default: 10000]: " adaptive_gap_cap
 read -p "Fallback gap if adaptive distance cannot be estimated, in bp [default: 2000]: " fallback_gap
-read -p "Minimum BLAST percent identity to keep a hit [default: 0 = no extra filter]: " min_pident
+read -p "Minimum BLAST percent identity to keep a hit [default: 80]: " min_pident
+read -p "Minimum BLAST query coverage to keep a hit [default: 70]: " min_qcov
 read -p "How many largest arrays per satDNA should be highlighted in the TOP plot? [default: 2]: " top_n_arrays
-read -p "Comma-separated chromosome/scaffold names to highlight, optional (example: ChrB,B,microB): " highlight_chromosomes
+read -p "Comma-separated chromosome/scaffold names to highlight (example: ChrB,B,microB): " highlight_chromosomes
 read -p "How many threads do you want to use? (e.g., 4, 8, etc.): " NUM_THREADS
 
 adaptive_gap_cap="${adaptive_gap_cap:-10000}"
 fallback_gap="${fallback_gap:-2000}"
-min_pident="${min_pident:-0}"
+min_pident="${min_pident:-80}"
+min_qcov="${min_qcov:-70}"
 top_n_arrays="${top_n_arrays:-2}"
 
 if ! command -v parallel &> /dev/null; then
@@ -191,8 +199,9 @@ for input_biblio in $input_biblios; do
     rm -rf "$tmp_parallel_dir"
     mkdir -p "$tmp_parallel_dir"
 
+    # Run BLAST with additional coverage filter
     parallel --jobs "$NUM_THREADS" \
-        run_blast_for_ref {} "$temp_genome" "$multiplier" "$tmp_parallel_dir/{}.raw_hits.tsv" 1 \
+        run_blast_for_ref {} "$temp_genome" "$multiplier" "$tmp_parallel_dir/{}.raw_hits.tsv" 1 "$min_qcov" \
         ::: "${expanded_refs_no_ext[@]}"
 
     {
@@ -219,20 +228,28 @@ import os
 import json
 import re
 import math
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from Bio import SeqIO
 from matplotlib.patches import FancyBboxPatch, Rectangle
-from matplotlib.ticker import MultipleLocator
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.ticker import MultipleLocator, ScalarFormatter
+from matplotlib.colors import LinearSegmentedColormap, to_rgb
 
-fasta_file = "$temp_genome"
-genome_name = "$genome_name"
-output_prefix = "$output_prefix"
-raw_hits_file = os.path.join(genome_name, f"{output_prefix}_raw_blast_hits.tsv")
+# Improved color palettes
+COLOR_PALETTES = {
+    'vibrant': ['#E63946', '#457B9D', '#2A9D8F', '#F4A261', '#E76F51', '#6D597A', '#B5838D', '#4A7C59'],
+    'pastel': ['#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF', '#E8BAFF', '#FFB3E6', '#B3FFE5'],
+    'nature': ['#2E4057', '#6B8C5E', '#A8C69F', '#D4A373', '#E8D5B7', '#8CB0C9', '#B5C9D9', '#C9B8A8'],
+    'scientific': ['#1B4965', '#5FA8D3', '#90C9E2', '#C2E3E0', '#F7D6E0', '#F2B5D4', '#E5989B', '#B56576'],
+}
+
+FASTA_FILE = "$temp_genome"
+GENOME_NAME = "$genome_name"
+OUTPUT_PREFIX = "$output_prefix"
+RAW_HITS_FILE = os.path.join(GENOME_NAME, f"{OUTPUT_PREFIX}_raw_blast_hits.tsv")
 
 MIN_MONOMERS_PER_ARRAY = int("$multiplier")
 ADAPTIVE_GAP_CAP = int("$adaptive_gap_cap")
@@ -240,20 +257,22 @@ FALLBACK_GAP = int("$fallback_gap")
 MIN_PIDENT = float("$min_pident")
 TOP_N_ARRAYS = int("$top_n_arrays")
 HIGHLIGHT_CHROMOSOMES_RAW = "$highlight_chromosomes"
+SELECTED_PALETTE = 'scientific'  # Change to 'vibrant', 'pastel', 'nature', or 'scientific'
 
-os.makedirs(genome_name, exist_ok=True)
+os.makedirs(GENOME_NAME, exist_ok=True)
 
 def output_path(filename):
-    return os.path.join(genome_name, f"{output_prefix}_{filename}")
+    return os.path.join(GENOME_NAME, f"{OUTPUT_PREFIX}_{filename}")
 
 def natural_sort_key(text):
     return [int(c) if c.isdigit() else c.lower() for c in re.split(r'([0-9]+)', str(text))]
 
 def sanitize_accession(acc):
-    acc = str(acc).strip()
-    acc = acc.replace("ref|", "").replace("|", "")
-    acc = acc.split()[0]
-    return acc
+    acc = str(acc).strip().split()[0]
+    # BLAST+ can report a FASTA ID as gb|CM038724.1| while Biopython
+    # reads the same FASTA record as CM038724.1. Strip only the namespace.
+    match = re.fullmatch(r'(?:gb|ref|emb|dbj|lcl)\|([^|]+)\|?', acc)
+    return match.group(1) if match else acc
 
 def infer_pretty_name_from_header(header, fallback_index):
     h = str(header).strip()
@@ -273,8 +292,6 @@ def infer_pretty_name_from_header(header, fallback_index):
                 return f"scaffold{label}"
             return f"Chromosome{label}"
 
-    # Preserve simple sequence names already present in the FASTA header,
-    # such as B1, B2 or microB.
     if re.fullmatch(r'[A-Za-z0-9_.-]+', h):
         return h
 
@@ -486,6 +503,9 @@ def create_arrays_by_reference(df):
         num_minus = arr["Strands"].count("-")
         strand_mix = "mixed" if (num_plus > 0 and num_minus > 0) else ("+" if num_plus > 0 else "-")
 
+        # Calculate orientation consistency
+        orientation_consistency = max(num_plus, num_minus) / len(arr["Strands"]) if arr["Strands"] else 0
+
         gaps = arr["Gaps"]
         rows.append({
             "Chromosome": arr["Chromosome"],
@@ -504,7 +524,8 @@ def create_arrays_by_reference(df):
             "AdaptiveMergeGap_bp": int(arr["AdaptiveMergeGap_bp"]),
             "PlusStrandHits": int(num_plus),
             "MinusStrandHits": int(num_minus),
-            "StrandMix": strand_mix
+            "StrandMix": strand_mix,
+            "OrientationConsistency": orientation_consistency
         })
 
     out = pd.DataFrame(rows)
@@ -574,18 +595,29 @@ def make_valid_monomers_bed(raw_hits_mapped, out_path):
     ).to_csv(out_path, sep="\t", header=False, index=False)
 
 def get_color_map(refs):
-    cmap_names = ["tab20", "tab20b", "tab20c", "Dark2", "Set1"]
+    """Get color map using professional palettes with better contrast."""
     colors = []
-    for cmap_name in cmap_names:
-        cmap = plt.get_cmap(cmap_name)
-        n = cmap.N if hasattr(cmap, "N") else 20
-        for i in range(n):
-            rgba = cmap(i)
-            colors.append((float(rgba[0]), float(rgba[1]), float(rgba[2])))
-
+    palette = COLOR_PALETTES.get(SELECTED_PALETTE, COLOR_PALETTES['scientific'])
+    
+    # Expand palette if more references than colors
+    if len(refs) <= len(palette):
+        colors = palette[:len(refs)]
+    else:
+        # Cycle through palette with slight variations
+        extended = []
+        for i in range(len(refs)):
+            extended.append(palette[i % len(palette)])
+        colors = extended
+    
+    # Add some variation for readability
     color_map = {}
     for i, ref in enumerate(refs):
-        color_map[ref] = colors[i % len(colors)]
+        if i < len(colors):
+            color_map[ref] = colors[i]
+        else:
+            # Fallback
+            color_map[ref] = '#888888'
+    
     return color_map
 
 def parse_highlight_chromosomes(raw, sorted_chromosomes):
@@ -606,24 +638,26 @@ def parse_highlight_chromosomes(raw, sorted_chromosomes):
     return result
 
 def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes, all_refs, color_map, out_prefix, enhanced_visibility=False, min_visible_kb=80, title_extra="", top_arrays=None, combine_with_top=False, highlight_chromosomes=None):
+    """Improved chromosome array plot with better aesthetics."""
     highlight_chromosomes = highlight_chromosomes or set()
 
     sorted_chromosomes_for_axis = list(sorted_chromosomes)[::-1]
     max_len_mb = max(pretty_to_length.values()) / 1e6
 
-    chrom_height = 0.58
-    array_height = 0.50
-    spacing = 1.08
+    # Enhanced aesthetics: better sizes and spacing
+    chrom_height = 0.62
+    array_height = 0.48
+    spacing = 1.10
     fig_width = 38
-    fig_height = max(14, len(sorted_chromosomes_for_axis) * 0.50)
+    fig_height = max(14, len(sorted_chromosomes_for_axis) * 0.55)
 
     if combine_with_top:
         fig, axes = plt.subplots(
             nrows=2,
             ncols=1,
-            figsize=(fig_width, fig_height * 1.55),
+            figsize=(fig_width, fig_height * 1.65),
             sharex=True,
-            gridspec_kw={"height_ratios": [1.0, 1.0], "hspace": 0.18}
+            gridspec_kw={"height_ratios": [1.0, 1.0], "hspace": 0.15}
         )
         ax_list = list(axes)
         datasets = [
@@ -646,19 +680,21 @@ def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes
             length_mb = pretty_to_length[chrom] / 1e6
 
             if chrom in highlight_chromosomes:
-                facecolor = "#fff3cd"
-                edgecolor = "#7a5c00"
-                linewidth = 1.15
+                facecolor = "#FFF8E1"  # Soft yellow highlight
+                edgecolor = "#D4A017"
+                linewidth = 2.0
             else:
-                facecolor = "#f1f1f1"
-                edgecolor = "#bdbdbd"
-                linewidth = 0.40
+                # Gradient based on chromosome length for visual interest
+                intensity = min(0.95, 0.75 + 0.2 * (length_mb / max_len_mb))
+                facecolor = f"#{int(245*intensity):02x}{int(245*intensity):02x}{int(245*intensity):02x}"
+                edgecolor = "#B0B0B0"
+                linewidth = 0.6
 
             body = FancyBboxPatch(
                 (0, y - chrom_height / 2),
                 length_mb,
                 chrom_height,
-                boxstyle=f"round,pad=0.00,rounding_size={chrom_height * 0.22}",
+                boxstyle=f"round,pad=0.00,rounding_size={chrom_height * 0.20}",
                 linewidth=linewidth,
                 edgecolor=edgecolor,
                 facecolor=facecolor,
@@ -666,9 +702,15 @@ def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes
                 zorder=1,
             )
             ax.add_patch(body)
+            
+            # Add chromosome length label
+            ax.text(length_mb + max_len_mb * 0.005, y, 
+                   f'{length_mb:.1f} Mb', 
+                   fontsize=7, va='center', ha='left', color='#666666')
 
         dataset_sorted = dataset.sort_values("ArraySize", ascending=True).reset_index(drop=True)
 
+        # Add subtle shadow for arrays
         for _, row in dataset_sorted.iterrows():
             chrom = row["Chromosome"]
             if chrom not in y_positions:
@@ -696,47 +738,71 @@ def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes
 
             y = y_positions[chrom]
             color = color_map.get(ref, "#777777")
+            
+            # Parse color for transparency
+            try:
+                rgb = to_rgb(color)
+                face_alpha = 0.85
+                edge_alpha = 0.95
+            except:
+                rgb = (0.5, 0.5, 0.5)
+                face_alpha = 0.85
+                edge_alpha = 0.95
 
+            # Main array rectangle
             rect = Rectangle(
                 (start_mb, y - array_height / 2),
                 width_mb,
                 array_height,
-                linewidth=0.18,
+                linewidth=0.5,
                 edgecolor=color,
                 facecolor=color,
-                alpha=0.98,
+                alpha=face_alpha,
                 zorder=5,
             )
             ax.add_patch(rect)
+            
+            # Add small array size label for large arrays
+            if width_mb > 1.0:  # Only label if visible
+                size_kb = (end_bp - start_bp + 1) / 1000
+                if size_kb > 50:
+                    ax.text(start_mb + width_mb/2, y, 
+                           f'{size_kb:.0f}kb', 
+                           fontsize=6, va='center', ha='center', 
+                           color='white', weight='bold', alpha=0.9)
 
         ax.set_yticks([y_positions[c] for c in sorted_chromosomes_for_axis])
         ax.set_yticklabels(sorted_chromosomes_for_axis, fontsize=10)
-        ax.set_ylabel("Chromosomes/scaffolds", fontsize=12)
+        ax.set_ylabel("Chromosomes/scaffolds", fontsize=12, weight='bold')
 
         if enhanced_visibility:
             title_suffix = f"visible mode; arrays < {min_visible_kb} kb widened for display"
         else:
             title_suffix = "exact scale"
 
-        ax.set_title(f"{panel_title} ({title_suffix}){title_extra}", fontsize=14, pad=12)
-        ax.set_xlim(0, max_len_mb * 1.015)
-        ax.set_ylim(-spacing, (len(sorted_chromosomes_for_axis) - 1) * spacing + spacing)
+        ax.set_title(f"{panel_title} ({title_suffix}){title_extra}", fontsize=14, pad=15, weight='bold')
+        ax.set_xlim(0, max_len_mb * 1.08)
+        ax.set_ylim(-spacing * 0.7, (len(sorted_chromosomes_for_axis) - 1) * spacing + spacing * 0.7)
 
+        # Better grid styling
         ax.xaxis.set_major_locator(MultipleLocator(10))
-        ax.xaxis.set_minor_locator(MultipleLocator(5))
-        ax.grid(axis="x", which="major", color="#d0d0d0", linewidth=0.45, alpha=0.65, zorder=0)
-        ax.grid(axis="x", which="minor", color="#eeeeee", linewidth=0.25, alpha=0.55, zorder=0)
+        ax.xaxis.set_minor_locator(MultipleLocator(2))
+        ax.grid(axis="x", which="major", color="#D0D0D0", linewidth=0.5, alpha=0.7, zorder=0)
+        ax.grid(axis="x", which="minor", color="#EEEEEE", linewidth=0.2, alpha=0.5, zorder=0)
         ax.grid(axis="y", visible=False)
 
         for spine in ["top", "right"]:
             ax.spines[spine].set_visible(False)
-        ax.spines["left"].set_color("#777777")
-        ax.spines["bottom"].set_color("#777777")
+        ax.spines["left"].set_color("#888888")
+        ax.spines["bottom"].set_color("#888888")
+        ax.spines["left"].set_linewidth(1.0)
+        ax.spines["bottom"].set_linewidth(1.0)
 
-    ax_list[-1].set_xlabel("Position on chromosome/scaffold (Mb)", fontsize=12)
+    ax_list[-1].set_xlabel("Position on chromosome/scaffold (Mb)", fontsize=12, weight='bold')
 
+    # Enhanced legend
     handles = [
-        Rectangle((0, 0), 1, 1, facecolor=color_map[ref], edgecolor=color_map[ref], alpha=0.98)
+        Rectangle((0, 0), 1, 1, facecolor=color_map[ref], edgecolor=color_map[ref], alpha=0.9)
         for ref in all_refs
     ]
     labels = [str(ref) for ref in all_refs]
@@ -744,22 +810,25 @@ def draw_chromosome_array_plot(plot_arrays, pretty_to_length, sorted_chromosomes
     ax_list[0].legend(
         handles,
         labels,
-        title="References",
+        title="SatDNA References",
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
         fontsize=9,
         title_fontsize=10,
         frameon=True,
         borderaxespad=0.0,
-        ncol=1
+        ncol=1,
+        framealpha=0.9,
+        edgecolor='#888888'
     )
 
     fig.tight_layout()
-    fig.savefig(output_path(f"{out_prefix}.png"), dpi=600, bbox_inches="tight")
-    fig.savefig(output_path(f"{out_prefix}.pdf"), bbox_inches="tight")
+    fig.savefig(output_path(f"{out_prefix}.png"), dpi=600, bbox_inches="tight", facecolor='white')
+    fig.savefig(output_path(f"{out_prefix}.pdf"), bbox_inches="tight", facecolor='white')
     plt.close(fig)
 
 def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
+    """Improved scatter plot with better aesthetics."""
     df = arrays_by_reference.copy()
     if df.empty:
         print("No data available for the scatter plot. Skipping scatter.")
@@ -769,13 +838,14 @@ def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
     df = df.sort_values(["Chromosome","Reference","ArraySize"]).reset_index(drop=True)
 
     fig_width = max(18, len(sorted_chromosomes) * 0.45)
-    fig, ax = plt.subplots(figsize=(fig_width, 8))
+    fig_height = 8
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     ref_offsets = {}
     if len(all_refs) == 1:
         ref_offsets[all_refs[0]] = 0
     else:
-        offsets = np.linspace(-0.34, 0.34, len(all_refs))
+        offsets = np.linspace(-0.35, 0.35, len(all_refs))
         ref_offsets = {ref: offsets[i] for i, ref in enumerate(all_refs)}
 
     chrom_to_x = {chrom: i for i, chrom in enumerate(sorted_chromosomes)}
@@ -785,33 +855,52 @@ def draw_scatter(arrays_by_reference, sorted_chromosomes, all_refs, color_map):
         if sub.empty:
             continue
         xs = [chrom_to_x[c] + ref_offsets[ref] for c in sub["Chromosome"]]
+        
+        # Size based on number of monomers
+        sizes = [max(20, min(200, m * 0.5 + 10)) for m in sub["NumMonomers"]]
+        
         ax.scatter(
             xs,
             sub["ArraySize"],
-            s=34,
-            alpha=0.82,
+            s=sizes,
+            alpha=0.7,
             color=color_map.get(ref, "#777777"),
             label=ref,
-            edgecolors="none"
+            edgecolors='white',
+            linewidth=0.5
         )
 
     ax.set_xticks(range(len(sorted_chromosomes)))
-    ax.set_xticklabels(sorted_chromosomes, rotation=90)
-    ax.set_xlabel("Sequences")
-    ax.set_ylabel("Array size (bp)")
-    ax.set_title("Array size distribution by chromosome/scaffold")
-    ax.grid(axis="y", which="major", color="#d0d0d0", linewidth=0.45, alpha=0.65)
+    ax.set_xticklabels(sorted_chromosomes, rotation=90, fontsize=9)
+    ax.set_xlabel("Sequences", fontsize=12, weight='bold')
+    ax.set_ylabel("Array size (bp)", fontsize=12, weight='bold')
+    ax.set_title("Array size distribution by chromosome/scaffold", fontsize=14, weight='bold')
+    
+    # Better grid
+    ax.grid(axis="y", which="major", color="#D0D0D0", linewidth=0.5, alpha=0.6)
+    ax.grid(axis="y", which="minor", color="#EEEEEE", linewidth=0.2, alpha=0.4)
+    
+    # Use log scale if data spans multiple orders of magnitude
+    sizes = df["ArraySize"].values
+    if len(sizes) > 0 and sizes.max() / max(sizes.min(), 1) > 100:
+        ax.set_yscale('log')
+        ax.set_ylabel("Array size (bp) - Log scale", fontsize=12, weight='bold')
 
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_color("#888888")
+    ax.spines["bottom"].set_color("#888888")
 
-    ax.legend(title="References", bbox_to_anchor=(1.01, 1), loc="upper left", fontsize=9, title_fontsize=10)
+    ax.legend(title="References", bbox_to_anchor=(1.01, 1), loc="upper left", 
+              fontsize=9, title_fontsize=10, frameon=True, framealpha=0.9)
+    
     fig.tight_layout()
-    fig.savefig(output_path("array_chromosome_vs_size_scatter.png"), dpi=300, bbox_inches="tight")
-    fig.savefig(output_path("array_chromosome_vs_size_scatter.pdf"), bbox_inches="tight")
+    fig.savefig(output_path("array_chromosome_vs_size_scatter.png"), dpi=300, bbox_inches="tight", facecolor='white')
+    fig.savefig(output_path("array_chromosome_vs_size_scatter.pdf"), bbox_inches="tight", facecolor='white')
     plt.close(fig)
 
 def draw_heatmap(arrays_by_reference, sorted_chromosomes, all_refs):
+    """Improved heatmap with better color scheme."""
     if arrays_by_reference.empty:
         print("No data available for heatmap. Skipping heatmap.")
         return
@@ -841,29 +930,31 @@ def draw_heatmap(arrays_by_reference, sorted_chromosomes, all_refs):
     values = np.log10(summary_bp.values.astype(float) + 1)
 
     fig_width = max(10, len(all_refs) * 0.55)
-    fig_height = max(8, len(sorted_chromosomes) * 0.34)
+    fig_height = max(8, len(sorted_chromosomes) * 0.38)
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    im = ax.imshow(values, aspect="auto", interpolation="nearest")
+    
+    # Better color map for heatmap
+    cmap = LinearSegmentedColormap.from_list('heat', ['#FEF0D9', '#FDD49E', '#FD8D3C', '#D7301F'])
+    im = ax.imshow(values, aspect="auto", interpolation="nearest", cmap=cmap)
 
     ax.set_xticks(range(len(all_refs)))
-    ax.set_xticklabels(all_refs, rotation=90)
+    ax.set_xticklabels(all_refs, rotation=90, fontsize=9)
     ax.set_yticks(range(len(sorted_chromosomes)))
-    ax.set_yticklabels(sorted_chromosomes)
+    ax.set_yticklabels(sorted_chromosomes, fontsize=9)
 
-    ax.set_xlabel("satDNA reference")
-    ax.set_ylabel("Chromosome/scaffold")
-    ax.set_title("Total array abundance by chromosome and satDNA (log10 bp + 1)")
+    ax.set_xlabel("SatDNA references", fontsize=12, weight='bold')
+    ax.set_ylabel("Chromosome/scaffold", fontsize=12, weight='bold')
+    ax.set_title("Total array abundance by chromosome and satDNA\n(log10 bp + 1)", fontsize=14, weight='bold')
 
     cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label("log10(total array bp + 1)")
+    cbar.set_label("log10(total array bp + 1)", fontsize=11)
+    cbar.ax.tick_params(labelsize=9)
 
     fig.tight_layout()
-    fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.png"), dpi=300, bbox_inches="tight")
-    fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.pdf"), bbox_inches="tight")
+    fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.png"), dpi=300, bbox_inches="tight", facecolor='white')
+    fig.savefig(output_path("heatmap_chromosome_vs_satdna_total_bp.pdf"), bbox_inches="tight", facecolor='white')
     plt.close(fig)
-
-
 
 def array_n50_l50(lengths):
     """Return N50 and L50 for a collection of array lengths."""
@@ -878,15 +969,8 @@ def array_n50_l50(lengths):
             return int(value), int(i)
     return int(vals[-1]), int(len(vals))
 
-
 def build_nonoverlapping_satdna_composition(arrays_by_reference, pretty_to_length, sorted_chromosomes):
-    """
-    Convert possibly overlapping satDNA arrays into disjoint chromosome segments.
-
-    Bases covered by exactly one reference are assigned to that satDNA. Bases
-    simultaneously covered by two or more references are assigned to the
-    explicit category 'Multi_satDNA_overlap', preventing double counting.
-    """
+    """Convert possibly overlapping satDNA arrays into disjoint chromosome segments."""
     category_rows = []
     segment_rows = []
 
@@ -960,7 +1044,6 @@ def build_nonoverlapping_satdna_composition(arrays_by_reference, pretty_to_lengt
             })
 
     return pd.DataFrame(category_rows), pd.DataFrame(segment_rows)
-
 
 def summarize_satdna_by_chromosome(arrays_by_reference, composition_long, pretty_to_length, sorted_chromosomes):
     rows = []
@@ -1051,7 +1134,6 @@ def summarize_satdna_by_chromosome(arrays_by_reference, composition_long, pretty
 
     return pd.DataFrame(rows)
 
-
 def summarize_satdna_by_chromosome_reference(arrays_by_reference, pretty_to_length, sorted_chromosomes, all_refs):
     rows = []
     for chrom in sorted_chromosomes:
@@ -1085,7 +1167,6 @@ def summarize_satdna_by_chromosome_reference(arrays_by_reference, pretty_to_leng
             })
     return pd.DataFrame(rows)
 
-
 def format_bp(value):
     """Format a base-pair value for compact plot labels."""
     value = float(value)
@@ -1097,15 +1178,8 @@ def format_bp(value):
         return f"{value / 1e3:.1f} kb"
     return f"{int(round(value))} bp"
 
-
 def add_complete_genome_to_composition(composition_long, pretty_to_length, sorted_chromosomes):
-    """
-    Append a final whole-genome row to the non-overlapping composition table.
-
-    The whole-genome percentages use the summed length of every sequence selected
-    by num_sequences as the denominator. Thus, when 30 sequences are selected,
-    the plot contains those 30 rows plus one final Complete_genome row.
-    """
+    """Append a final whole-genome row to the non-overlapping composition table."""
     total_genome_bp = int(sum(int(pretty_to_length[c]) for c in sorted_chromosomes))
     genome_rows = (
         composition_long
@@ -1124,20 +1198,8 @@ def add_complete_genome_to_composition(composition_long, pretty_to_length, sorte
     ]
     return pd.concat([composition_long, genome_rows], ignore_index=True)
 
-
 def build_satellitome_composition(arrays_by_reference, sorted_chromosomes, all_refs):
-    """
-    Summarize the raw summed array size of every satDNA family.
-
-    For each chromosome, the sum of all ArraySize values is defined as 100% of
-    that chromosome's satellitome. A final Complete_genome row is calculated
-    from all selected chromosomes/scaffolds together.
-
-    This is intentionally based on the raw sum of arrays by reference, as
-    requested. Therefore, bases shared by arrays from different references can
-    contribute to more than one reference in this satellitome-composition panel.
-    The chromosome-length panel remains non-overlapping and does not double count.
-    """
+    """Summarize the raw summed array size of every satDNA family."""
     raw = (
         arrays_by_reference
         .groupby(["Chromosome", "Reference"], as_index=False)["ArraySize"]
@@ -1183,7 +1245,6 @@ def build_satellitome_composition(arrays_by_reference, sorted_chromosomes, all_r
     )
     return raw
 
-
 def draw_satdna_percentage_composition(
     composition_long,
     satellitome_long,
@@ -1191,16 +1252,7 @@ def draw_satdna_percentage_composition(
     all_refs,
     color_map,
 ):
-    """
-    Draw a two-panel figure.
-
-    Left: percentage of complete chromosome length occupied by each satDNA,
-    using non-overlapping genomic segments.
-
-    Right: relative composition of the satellitome only. For every row, the raw
-    sum of all arrays is 100%, and satDNA families are stacked in decreasing
-    total-array-size order within that chromosome.
-    """
+    """Draw a two-panel figure with improved aesthetics."""
     if composition_long.empty:
         print("No data available for satDNA percentage composition plot. Skipping.")
         return
@@ -1251,23 +1303,21 @@ def draw_satdna_percentage_composition(
         output_path("satellitome_composition_long.tsv"), sep="\t", index=False
     )
 
-    # barh draws the first entry at the bottom. Prepending Complete_genome makes
-    # it the final/bottom row while preserving B1, B2, chromosomes and unplaced
-    # in the same visible order as the original figure.
+    # Improved bar plot with better aesthetics
     plot_chromosomes = ["Complete_genome"] + list(sorted_chromosomes)[::-1]
-    fig_height = max(9, len(plot_chromosomes) * 0.43)
+    fig_height = max(10, len(plot_chromosomes) * 0.45)
     fig, (ax_left, ax_right) = plt.subplots(
         nrows=1,
         ncols=2,
-        figsize=(31, fig_height),
+        figsize=(32, fig_height),
         sharey=True,
-        gridspec_kw={"width_ratios": [1.0, 1.0], "wspace": 0.08},
+        gridspec_kw={"width_ratios": [1.0, 1.0], "wspace": 0.06},
     )
     y = np.arange(len(plot_chromosomes))
 
     category_colors = dict(color_map)
-    category_colors["Multi_satDNA_overlap"] = (0.15, 0.15, 0.15)
-    category_colors["Non_satDNA"] = (0.91, 0.91, 0.91)
+    category_colors["Multi_satDNA_overlap"] = (0.2, 0.2, 0.2)
+    category_colors["Non_satDNA"] = (0.92, 0.92, 0.92)
 
     # LEFT PANEL: complete chromosome length = 100%.
     left_values = np.zeros(len(plot_chromosomes), dtype=float)
@@ -1277,11 +1327,11 @@ def draw_satdna_percentage_composition(
             y,
             values,
             left=left_values,
-            height=0.72,
-            label=category,
+            height=0.7,
+            label=category if category in ["Multi_satDNA_overlap", "Non_satDNA"] else "",
             color=category_colors.get(category, (0.5, 0.5, 0.5)),
-            edgecolor="white",
-            linewidth=0.15,
+            edgecolor='white',
+            linewidth=0.2,
         )
         left_values += values
 
@@ -1289,19 +1339,23 @@ def draw_satdna_percentage_composition(
         100.0 - pivot.loc[plot_chromosomes, "Non_satDNA"].to_numpy(dtype=float)
     )
     for yi, pct in zip(y, total_sat_chrom_pct):
-        if pct >= 0.05:
+        if pct >= 0.5:
             ax_left.text(
-                min(pct + 0.18, 99.2), yi, f"{pct:.2f}%",
-                va="center", ha="left", fontsize=8
+                min(pct + 0.5, 97), yi, f"{pct:.1f}%",
+                va="center", ha="left", fontsize=8, weight='bold'
             )
 
-    ax_left.set_xlim(0, 100)
-    ax_left.set_xlabel("Percentage of chromosome length")
-    ax_left.set_ylabel("Chromosome/scaffold")
-    ax_left.set_title("satDNA as a percentage of chromosome length")
+    ax_left.set_xlim(0, 102)
+    ax_left.set_xlabel("Percentage of chromosome length", fontsize=12, weight='bold')
+    ax_left.set_ylabel("Chromosome/scaffold", fontsize=12, weight='bold')
+    ax_left.set_title("satDNA as a percentage of chromosome length", fontsize=13, weight='bold')
     ax_left.set_yticks(y)
-    ax_left.set_yticklabels(plot_chromosomes)
-    ax_left.grid(axis="x", linewidth=0.35, alpha=0.35)
+    ax_left.set_yticklabels(plot_chromosomes, fontsize=9)
+    ax_left.grid(axis="x", linewidth=0.3, alpha=0.4)
+    
+    # Add color bar at bottom of left panel
+    for spine in ["top", "right"]:
+        ax_left.spines[spine].set_visible(False)
 
     # RIGHT PANEL: summed arrays in each chromosome = 100% of its satellitome.
     total_sat_bp_lookup = (
@@ -1324,75 +1378,88 @@ def draw_satdna_percentage_composition(
                 yi,
                 pct,
                 left=current_left,
-                height=0.72,
+                height=0.7,
                 color=color_map.get(ref, (0.5, 0.5, 0.5)),
-                edgecolor="white",
-                linewidth=0.15,
+                edgecolor='white',
+                linewidth=0.2,
             )
             current_left += pct
 
         total_bp = int(total_sat_bp_lookup.get(chrom, 0))
         ax_right.text(
-            100.35,
+            100.5,
             yi,
             format_bp(total_bp),
             va="center",
             ha="left",
             fontsize=8,
             clip_on=False,
+            weight='bold'
         )
 
-    ax_right.set_xlim(0, 100)
-    ax_right.set_xlabel("Percentage of the satellitome (summed arrays = 100%)")
-    ax_right.set_title("Relative satDNA composition of each satellitome")
-    ax_right.grid(axis="x", linewidth=0.35, alpha=0.35)
+    ax_right.set_xlim(0, 104)
+    ax_right.set_xlabel("Percentage of the satellitome (summed arrays = 100%)", fontsize=12, weight='bold')
+    ax_right.set_title("Relative satDNA composition of each satellitome", fontsize=13, weight='bold')
+    ax_right.grid(axis="x", linewidth=0.3, alpha=0.4)
     ax_right.tick_params(axis="y", labelleft=False)
 
-    for ax in (ax_left, ax_right):
-        for spine in ["top", "right"]:
-            ax.spines[spine].set_visible(False)
+    for spine in ["top", "right"]:
+        ax_right.spines[spine].set_visible(False)
 
-    legend_categories = list(all_refs)
-    if "Multi_satDNA_overlap" in categories:
-        legend_categories.append("Multi_satDNA_overlap")
+    # Improved legend
+    legend_categories = []
+    legend_handles = []
+    
+    # Add satDNA references with colors
+    for ref in all_refs:
+        if ref in color_map:
+            legend_categories.append(ref)
+            legend_handles.append(
+                Rectangle((0, 0), 1, 1, facecolor=color_map[ref], edgecolor='white', linewidth=0.2)
+            )
+    
+    # Add overlap and non-satDNA
+    legend_categories.append("Multi_satDNA_overlap")
+    legend_handles.append(
+        Rectangle((0, 0), 1, 1, facecolor=category_colors["Multi_satDNA_overlap"], edgecolor='white', linewidth=0.2)
+    )
     legend_categories.append("Non_satDNA")
-    legend_handles = [
-        Rectangle(
-            (0, 0), 1, 1,
-            facecolor=category_colors.get(cat, (0.5, 0.5, 0.5)),
-            edgecolor="white",
-            linewidth=0.15,
-        )
-        for cat in legend_categories
-    ]
+    legend_handles.append(
+        Rectangle((0, 0), 1, 1, facecolor=category_colors["Non_satDNA"], edgecolor='#CCCCCC', linewidth=0.2)
+    )
+
     ax_right.legend(
         legend_handles,
         legend_categories,
-        title="satDNA / category",
-        bbox_to_anchor=(1.13, 1),
+        title="SatDNA / category",
+        bbox_to_anchor=(1.12, 1),
         loc="upper left",
         frameon=True,
         fontsize=8,
         title_fontsize=9,
+        framealpha=0.95,
+        edgecolor='#888888'
     )
 
     fig.suptitle(
         "Chromosomal satDNA abundance and satellitome composition",
-        fontsize=15,
-        y=0.997,
+        fontsize=16,
+        y=0.995,
+        weight='bold'
     )
-    fig.tight_layout(rect=[0, 0, 0.91, 0.985])
+    fig.tight_layout(rect=[0, 0, 0.89, 0.985])
     fig.savefig(
         output_path("satdna_percentage_composition_by_chromosome.png"),
         dpi=600,
         bbox_inches="tight",
+        facecolor='white'
     )
     fig.savefig(
         output_path("satdna_percentage_composition_by_chromosome.pdf"),
         bbox_inches="tight",
+        facecolor='white'
     )
     plt.close(fig)
-
 
 def save_metrics_workbook(chromosome_metrics, chromosome_reference_metrics, composition_long, composition_segments, satellitome_long):
     out_xlsx = output_path("satdna_metrics_by_chromosome.xlsx")
@@ -1408,7 +1475,6 @@ def save_metrics_workbook(chromosome_metrics, chromosome_reference_metrics, comp
     except ImportError:
         print("openpyxl is not installed; TSV tables were saved, but the XLSX workbook was skipped.")
 
-
 def make_top_arrays(arrays_by_reference, top_n):
     if arrays_by_reference.empty:
         return arrays_by_reference.copy()
@@ -1421,10 +1487,11 @@ def make_top_arrays(arrays_by_reference, top_n):
         .reset_index(drop=True)
     )
 
-accession_to_pretty, pretty_to_length, accession_to_length, records_info = build_header_mapping(fasta_file)
+# Main execution
+accession_to_pretty, pretty_to_length, accession_to_length, records_info = build_header_mapping(FASTA_FILE)
 save_header_mapping(records_info, output_path("sequence_name_mapping.tsv"))
 
-raw_hits = read_raw_hits(raw_hits_file)
+raw_hits = read_raw_hits(RAW_HITS_FILE)
 
 if raw_hits.empty:
     print("No BLAST hits found. Skipping plots.")
@@ -1459,7 +1526,7 @@ arrays_by_reference.to_csv(output_path("arrays_by_reference.tsv"), sep="\t", ind
 arrays_by_reference.to_csv(output_path("arrays_by_reference_for_plot.tsv"), sep="\t", index=False)
 merged_regions.to_csv(output_path("merged_regions_multi_satdna.tsv"), sep="\t", index=False)
 
-# Backward-compatible output name from the older script.
+# Backward-compatible output name
 merged_regions.to_csv(output_path("merged_arrays.tsv"), sep="\t", index=False)
 
 all_refs = sorted(arrays_by_reference["Reference"].dropna().unique(), key=natural_sort_key)
@@ -1467,10 +1534,10 @@ sorted_chromosomes = sorted(pretty_to_length.keys(), key=natural_sort_key)
 highlight_chromosomes = parse_highlight_chromosomes(HIGHLIGHT_CHROMOSOMES_RAW, sorted_chromosomes)
 
 color_map = get_color_map(all_refs)
-with open(os.path.join(genome_name, "reference_colors.json"), "w") as f:
+with open(os.path.join(GENOME_NAME, "reference_colors.json"), "w") as f:
     json.dump({k: list(v) for k, v in color_map.items()}, f, indent=2)
 
-# Chromosome-level metrics and non-overlapping percentage composition.
+# Chromosome-level metrics and non-overlapping percentage composition
 composition_long, composition_segments = build_nonoverlapping_satdna_composition(
     arrays_by_reference, pretty_to_length, sorted_chromosomes
 )
@@ -1560,35 +1627,31 @@ summary = (
         MaxArrayBp=("ArraySize", "max"),
         TotalMonomerHits=("NumMonomers", "sum"),
         MedianMonomersPerArray=("NumMonomers", "median"),
-        MeanPident=("MeanPident", "mean")
+        MeanPident=("MeanPident", "mean"),
+        OrientationConsistency=("OrientationConsistency", "mean")
     )
     .reset_index()
 )
 summary.to_csv(output_path("summary_by_reference.tsv"), sep="\t", index=False)
 
-print("Plots and tables successfully generated in:", genome_name)
-print("Output prefix:", output_prefix)
-print("Saved image:", output_path("chromosomes_with_annotations.png"))
-print("Saved image:", output_path(f"chromosomes_with_annotations_plus_top_{TOP_N_ARRAYS}.png"))
-print("Saved image:", output_path("array_chromosome_vs_size_scatter.png"))
-print("Saved image:", output_path("heatmap_chromosome_vs_satdna_total_bp.png"))
-print("Saved table:", raw_hits_file)
-print("Saved table:", output_path("raw_blast_hits_mapped.tsv"))
-print("Saved table:", output_path("valid_monomers.bed"))
-print("Saved table:", output_path("arrays_by_reference.tsv"))
-print("Saved table:", output_path("merged_regions_multi_satdna.tsv"))
-print("Saved table:", output_path("adaptive_merge_distance_by_reference.tsv"))
-print("Saved table:", output_path("summary_by_reference.tsv"))
-print("Saved table:", output_path("sequence_name_mapping.tsv"))
-print("Saved table:", output_path("satdna_metrics_by_chromosome.tsv"))
-print("Saved table:", output_path("satdna_metrics_by_chromosome_reference.tsv"))
-print("Saved table:", output_path("satdna_percentage_composition_long.tsv"))
-print("Saved table:", output_path("satdna_nonoverlapping_segments.tsv"))
-print("Saved table:", output_path("satdna_percentage_composition_long_with_complete_genome.tsv"))
-print("Saved table:", output_path("satellitome_composition_long.tsv"))
-print("Saved table:", output_path("satellitome_total_array_bp_wide.tsv"))
-print("Saved table:", output_path("satellitome_percentage_composition_wide.tsv"))
-print("Saved image:", output_path("satdna_percentage_composition_by_chromosome.png"))
+print(" Analysis completed successfully!")
+print(f" Output directory: {GENOME_NAME}")
+print(f" Output prefix: {OUTPUT_PREFIX}")
+print("")
+print(" Generated plots:")
+print(f"  - {output_path('chromosomes_with_annotations.png')}")
+print(f"  - {output_path('chromosomes_with_annotations_exact_scale.png')}")
+print(f"  - {output_path('chromosomes_with_annotations_plus_top_' + str(TOP_N_ARRAYS) + '.png')}")
+print(f"  - {output_path('array_chromosome_vs_size_scatter.png')}")
+print(f"  - {output_path('heatmap_chromosome_vs_satdna_total_bp.png')}")
+print(f"  - {output_path('satdna_percentage_composition_by_chromosome.png')}")
+print("")
+print(" Generated tables:")
+print(f"  - {output_path('raw_blast_hits_mapped.tsv')}")
+print(f"  - {output_path('valid_monomers.bed')}")
+print(f"  - {output_path('arrays_by_reference.tsv')}")
+print(f"  - {output_path('summary_by_reference.tsv')}")
+print(f"  - {output_path('satdna_metrics_by_chromosome.xlsx')}")
 EOF
 
 done

@@ -32,6 +32,7 @@ dependencies:
   - seaborn
   - biopython
   - parasail
+  - openpyxl
 
   # Common Unix tools (normalmente já existem, mas garante reprodutibilidade)
   - unzip

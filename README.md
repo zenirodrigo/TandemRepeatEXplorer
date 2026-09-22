@@ -7,7 +7,7 @@
 
 <img align="right" src="social-preview.png?raw=1" width="250" alt="Repository Icon">
 <br clear="right">
-<h1>Tandem Repeat Explorer</h1>
+<h1>T-REx </h1>
 
 
 T-REx (Tandem Repeat Explorer) is a modular Bash/Python toolkit for the identification, characterization, and visualization of tandem arrays from genome assemblies and short-read sequencing data.
